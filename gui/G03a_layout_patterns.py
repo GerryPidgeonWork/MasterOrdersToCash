@@ -78,28 +78,25 @@ from gui.G00a_gui_packages import tk, ttk, init_gui_theme
 # Layout utilities from G02b
 from gui.G02b_layout_utils import layout_row
 
-
-# ====================================================================================================
-# 3. LOCAL SPACING CONSTANTS
-# ----------------------------------------------------------------------------------------------------
-# G03 must NOT import spacing tokens from G01a.
-# These literal values match the G01a design system for consistency.
-# ====================================================================================================
-
-_SPACING_SM: int = 8
-_SPACING_MD: int = 16
+# Spacing tokens from G02a (re-exported from G01a)
+from gui.G02a_widget_primitives import (
+    SPACING_SM,
+    SPACING_MD,
+)
 
 
 # ====================================================================================================
-# 4. PAGE LAYOUT PATTERNS
+# 3. PAGE LAYOUT PATTERNS
 # ----------------------------------------------------------------------------------------------------
 # Standard page-level layout structures.
 # ====================================================================================================
 
 def page_layout(
     parent: tk.Misc,
-    padding: int = _SPACING_MD,
-) -> ttk.Frame:
+    padding: int = SPACING_MD,
+    bg_colour: dict[str, str] | None = None,
+    bg_shade: str = "LIGHT",
+) -> ttk.Frame | tk.Frame:
     """
     Description:
         Create a standard page layout frame with consistent padding.
@@ -109,10 +106,15 @@ def page_layout(
         parent:
             The parent widget (typically BaseWindow.main_frame or a root).
         padding:
-            Internal padding in pixels. Defaults to _SPACING_MD.
+            Internal padding in pixels. Defaults to SPACING_MD.
+        bg_colour:
+            Optional background colour family dict (e.g., GUI_PRIMARY).
+            If provided, uses tk.Frame with explicit background.
+        bg_shade:
+            Shade key to use from bg_colour. Defaults to "LIGHT".
 
     Returns:
-        ttk.Frame:
+        ttk.Frame | tk.Frame:
             A frame configured as the main page container.
 
     Raises:
@@ -121,8 +123,15 @@ def page_layout(
     Notes:
         - Frame uses grid with weight=1 for expansion.
         - Caller should use .pack(fill="both", expand=True) or equivalent.
+        - When bg_colour is provided, returns tk.Frame with explicit background.
     """
-    frame = ttk.Frame(parent, padding=padding)
+    if bg_colour is not None:
+        # Use tk.Frame for explicit background colour
+        frame = tk.Frame(parent, bg=bg_colour[bg_shade], padx=padding, pady=padding)
+    else:
+        # Use ttk.Frame for default theme styling
+        frame = ttk.Frame(parent, padding=padding)
+    
     frame.columnconfigure(0, weight=1)
     frame.rowconfigure(0, weight=1)
     return frame
@@ -185,7 +194,7 @@ def two_column_layout(
     parent: tk.Widget,
     left_weight: int = 1,
     right_weight: int = 1,
-    gap: int = _SPACING_MD,
+    gap: int = SPACING_MD,
     padding: int = 0,
 ) -> tuple[ttk.Frame, ttk.Frame, ttk.Frame]:
     """
@@ -232,7 +241,7 @@ def two_column_layout(
 def three_column_layout(
     parent: tk.Misc,
     weights: tuple[int, int, int] = (1, 2, 1),
-    gap: int = _SPACING_MD,
+    gap: int = SPACING_MD,
     padding: int = 0,
 ) -> tuple[ttk.Frame, ttk.Frame, ttk.Frame, ttk.Frame]:
     """
@@ -282,7 +291,7 @@ def sidebar_content_layout(
     parent: tk.Misc,
     sidebar_width: int = 200,
     sidebar_side: Literal["left", "right"] = "left",
-    gap: int = _SPACING_MD,
+    gap: int = SPACING_MD,
     padding: int = 0,
 ) -> tuple[ttk.Frame, ttk.Frame, ttk.Frame]:
     """
@@ -342,8 +351,8 @@ def sidebar_content_layout(
 
 def section_with_header(
     parent: tk.Misc,
-    header_padding: int = _SPACING_SM,
-    content_padding: int = _SPACING_MD,
+    header_padding: int = SPACING_SM,
+    content_padding: int = SPACING_MD,
 ) -> tuple[ttk.Frame, ttk.Frame, ttk.Frame]:
     """
     Description:
@@ -384,7 +393,7 @@ def section_with_header(
 def toolbar_content_layout(
     parent: tk.Misc,
     toolbar_height: int = 40,
-    toolbar_padding: int = _SPACING_SM,
+    toolbar_padding: int = SPACING_SM,
     content_padding: int = 0,
 ) -> tuple[ttk.Frame, ttk.Frame, ttk.Frame]:
     """
@@ -435,8 +444,8 @@ def toolbar_content_layout(
 def button_row(
     parent: tk.Misc,
     alignment: Literal["left", "center", "right"] = "right",
-    spacing: int = _SPACING_SM,
-    padding: int = _SPACING_MD,
+    spacing: int = SPACING_SM,
+    padding: int = SPACING_MD,
 ) -> ttk.Frame:
     """
     Description:
@@ -476,7 +485,7 @@ def button_row(
 def form_row(
     parent: tk.Misc,
     label_width: int = 120,
-    gap: int = _SPACING_SM,
+    gap: int = SPACING_SM,
 ) -> tuple[ttk.Frame, ttk.Frame, ttk.Frame]:
     """
     Description:
@@ -517,7 +526,7 @@ def form_row(
 def split_row(
     parent: tk.Misc,
     weights: tuple[int, ...] = (1, 1),
-    gap: int = _SPACING_MD,
+    gap: int = SPACING_MD,
 ) -> tuple[ttk.Frame, list[ttk.Frame]]:
     """
     Description:
@@ -595,7 +604,7 @@ if __name__ == "__main__":
     try:
         # Test header_content_footer_layout
         outer, header, content, footer = header_content_footer_layout(
-            root, header_height=50, footer_height=30, padding=_SPACING_MD
+            root, header_height=50, footer_height=30, padding=SPACING_MD
         )
         outer.pack(fill="both", expand=True)
 
@@ -605,7 +614,7 @@ if __name__ == "__main__":
 
         # Two-column layout inside content
         content_outer, left, right = two_column_layout(
-            content, left_weight=1, right_weight=2, gap=_SPACING_MD
+            content, left_weight=1, right_weight=2, gap=SPACING_MD
         )
         content_outer.pack(fill="both", expand=True)
 

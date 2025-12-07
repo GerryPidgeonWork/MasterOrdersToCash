@@ -129,8 +129,8 @@ GUI_FONT_ITALIC    = True
 # Widgets never use these directly; they use the GUI_* semantic surfaces.
 # ====================================================================================================
 
-COLOUR_PRIMARY_BASE   = "#00A3FE"   # Brand blue
-COLOUR_SECONDARY_BASE = "#F3F8FE"   # Neutral background
+COLOUR_PRIMARY_BASE   = "#1D4ED8"   # Professional blue
+COLOUR_SECONDARY_BASE = "#F8FAFC"   # Slightly cooler light grey
 
 COLOUR_SUCCESS_LIGHT = "#3EFF9D"
 COLOUR_SUCCESS_MID   = "#34E683"

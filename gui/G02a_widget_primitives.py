@@ -111,11 +111,6 @@ from gui.G01b_style_base import (
     # Control types (G01f)
     ControlWidgetType,
     ControlVariantType,
-    # Value tuples (for iteration)
-    INPUT_CONTROLS,
-    INPUT_ROLES,
-    CONTROL_WIDGETS,
-    CONTROL_VARIANTS,
 )
 
 # Text style resolver from G01c
@@ -1068,7 +1063,7 @@ def make_label(
     parent: tk.Misc | tk.Widget,
     text: str = "",
     fg_colour: ColourFamily | None = None,
-    fg_shade: ShadeType | TextShadeType = "BLACK",
+    fg_shade: ShadeType | TextShadeType = "BLACK", # UPDATED: Default from DARK to BLACK
     bg_colour: ColourFamily | None = None,
     bg_shade: ShadeType | None = None,
     size: Literal["DISPLAY", "HEADING", "TITLE", "BODY", "SMALL"] = "BODY",
@@ -1078,6 +1073,8 @@ def make_label(
     **kwargs: Any,
 ) -> ttk.Label:
     """
+    Create a styled label. Use `fg_colour`/`fg_shade` for text colour, `bg_colour`/`bg_shade` for background.
+
     Description:
         Create a styled ttk.Label widget. Resolves style via G01c and applies it.
 
@@ -1146,6 +1143,8 @@ def make_frame(
     **kwargs: Any,
 ) -> ttk.Frame:
     """
+    Create a styled frame/container. Use `role`/`shade` for presets (SECONDARY, SUCCESS, etc.), or explicit `bg_colour`.
+
     Description:
         Create a styled ttk.Frame widget. Resolves style via G01d and applies it.
 
@@ -1209,6 +1208,8 @@ def make_entry(
     **kwargs: Any,
 ) -> ttk.Entry:
     """
+    Create a styled text entry field. Use `role`/`shade` for appearance (SECONDARY, ERROR, SUCCESS).
+
     Description:
         Create a styled ttk.Entry widget. Resolves style via G01e and applies it.
 
@@ -1265,6 +1266,8 @@ def make_combobox(
     **kwargs: Any,
 ) -> ttk.Combobox:
     """
+    Create a styled dropdown combobox. Use `role`/`shade` for appearance, `values` for options.
+
     Description:
         Create a styled ttk.Combobox widget. Resolves style via G01e and applies it.
 
@@ -1325,6 +1328,8 @@ def make_spinbox(
     **kwargs: Any,
 ) -> ttk.Spinbox:
     """
+    Create a styled numeric spinbox. Use `from_`/`to` for range, `role`/`shade` for appearance.
+
     Description:
         Create a styled ttk.Spinbox widget. Resolves style via G01e and applies it.
 
@@ -1393,6 +1398,8 @@ def make_button(
     **kwargs: Any,
 ) -> ttk.Button:
     """
+    Create a styled button. Use `variant` for presets (PRIMARY, SUCCESS, etc.), or override with explicit colours.
+
     Description:
         Create a styled ttk.Button widget. Resolves style via G01f and applies it.
 
@@ -1473,9 +1480,22 @@ def make_checkbox(
     variable: tk.BooleanVar | None = None,
     command: Callable[[], None] | None = None,
     variant: ControlVariantType = "PRIMARY",
+    fg_colour: ColourFamily | None = None,
+    fg_shade: ShadeType | TextShadeType = "BLACK",
+    bg_colour: ColourFamily | None = None,
+    bg_shade_normal: ShadeType | None = None,
+    bg_shade_hover: ShadeType | None = None,
+    bg_shade_pressed: ShadeType | None = None,
+    border_colour: ColourFamily | None = None,
+    border_shade: ShadeType | None = None,
+    border_weight: BorderWeightType | None = "THIN",
+    padding: SpacingType | None = "SM",
+    relief: str | None = None,
     **kwargs: Any,
 ) -> ttk.Checkbutton:
     """
+    Create a styled checkbox. Use `variant` for presets (PRIMARY, SUCCESS, etc.), or override with explicit colours.
+
     Description:
         Create a styled ttk.Checkbutton widget. Resolves style via G01f and applies it.
 
@@ -1489,7 +1509,29 @@ def make_checkbox(
         command:
             Optional callback function for checkbox toggle.
         variant:
-            Semantic role / colour variant.
+            Semantic role / colour variant (PRIMARY, SECONDARY, SUCCESS, WARNING, ERROR).
+        fg_colour:
+            Foreground colour family (overrides variant).
+        fg_shade:
+            Shade within the foreground family.
+        bg_colour:
+            Background colour family (overrides variant).
+        bg_shade_normal:
+            Shade for normal background state.
+        bg_shade_hover:
+            Shade for hover background state.
+        bg_shade_pressed:
+            Shade for pressed background state.
+        border_colour:
+            Border colour family.
+        border_shade:
+            Shade within the border family.
+        border_weight:
+            Border weight token.
+        padding:
+            Internal padding token.
+        relief:
+            Tcl/Tk relief style.
         **kwargs:
             Additional ttk.Checkbutton arguments.
 
@@ -1499,13 +1541,28 @@ def make_checkbox(
 
     Raises:
         KeyError:
-            If variant is invalid.
+            If shade tokens are invalid for their colour families.
 
     Notes:
         - Style resolved via button_style() with widget_type="CHECKBOX".
+        - Use variant for quick presets, or override with explicit colour params.
         - Widget is NOT packed/gridded; caller must place it.
     """
-    style_name = button_style(widget_type="CHECKBOX", variant=variant)
+    style_name = button_style(
+        widget_type="CHECKBOX",
+        variant=variant,
+        fg_colour=fg_colour,
+        fg_shade=fg_shade,
+        bg_colour=bg_colour,
+        bg_shade_normal=bg_shade_normal,
+        bg_shade_hover=bg_shade_hover,
+        bg_shade_pressed=bg_shade_pressed,
+        border_colour=border_colour,
+        border_shade=border_shade,
+        border_weight=border_weight,
+        padding=padding,
+        relief=relief,
+    )
     chk_kwargs: dict[str, Any] = {"text": text, "style": style_name, **kwargs}
     if variable is not None:
         chk_kwargs["variable"] = variable
@@ -1521,9 +1578,22 @@ def make_radio(
     value: str | int = "",
     command: Callable[[], None] | None = None,
     variant: ControlVariantType = "PRIMARY",
+    fg_colour: ColourFamily | None = None,
+    fg_shade: ShadeType | TextShadeType = "BLACK",
+    bg_colour: ColourFamily | None = None,
+    bg_shade_normal: ShadeType | None = None,
+    bg_shade_hover: ShadeType | None = None,
+    bg_shade_pressed: ShadeType | None = None,
+    border_colour: ColourFamily | None = None,
+    border_shade: ShadeType | None = None,
+    border_weight: BorderWeightType | None = "THIN",
+    padding: SpacingType | None = "SM",
+    relief: str | None = None,
     **kwargs: Any,
 ) -> ttk.Radiobutton:
     """
+    Create a styled radio button. Use `variant` for presets (PRIMARY, SUCCESS, etc.), or override with explicit colours.
+
     Description:
         Create a styled ttk.Radiobutton widget. Resolves style via G01f and applies it.
 
@@ -1539,7 +1609,29 @@ def make_radio(
         command:
             Optional callback function for radio selection.
         variant:
-            Semantic role / colour variant.
+            Semantic role / colour variant (PRIMARY, SECONDARY, SUCCESS, WARNING, ERROR).
+        fg_colour:
+            Foreground colour family (overrides variant).
+        fg_shade:
+            Shade within the foreground family.
+        bg_colour:
+            Background colour family (overrides variant).
+        bg_shade_normal:
+            Shade for normal background state.
+        bg_shade_hover:
+            Shade for hover background state.
+        bg_shade_pressed:
+            Shade for pressed background state.
+        border_colour:
+            Border colour family.
+        border_shade:
+            Shade within the border family.
+        border_weight:
+            Border weight token.
+        padding:
+            Internal padding token.
+        relief:
+            Tcl/Tk relief style.
         **kwargs:
             Additional ttk.Radiobutton arguments.
 
@@ -1549,13 +1641,28 @@ def make_radio(
 
     Raises:
         KeyError:
-            If variant is invalid.
+            If shade tokens are invalid for their colour families.
 
     Notes:
         - Style resolved via button_style() with widget_type="RADIO".
+        - Use variant for quick presets, or override with explicit colour params.
         - Widget is NOT packed/gridded; caller must place it.
     """
-    style_name = button_style(widget_type="RADIO", variant=variant)
+    style_name = button_style(
+        widget_type="RADIO",
+        variant=variant,
+        fg_colour=fg_colour,
+        fg_shade=fg_shade,
+        bg_colour=bg_colour,
+        bg_shade_normal=bg_shade_normal,
+        bg_shade_hover=bg_shade_hover,
+        bg_shade_pressed=bg_shade_pressed,
+        border_colour=border_colour,
+        border_shade=border_shade,
+        border_weight=border_weight,
+        padding=padding,
+        relief=relief,
+    )
     radio_kwargs: dict[str, Any] = {"text": text, "value": value, "style": style_name, **kwargs}
     if variable is not None:
         radio_kwargs["variable"] = variable
@@ -1818,6 +1925,8 @@ def page_title(
     **kwargs: Any,
 ) -> ttk.Label:
     """
+    Create a large, bold page title (DISPLAY size). Use `fg_colour`/`fg_shade` to customise colour.
+
     Description:
         Create a page title label with DISPLAY size and bold weight.
 
@@ -1874,6 +1983,8 @@ def section_title(
     **kwargs: Any,
 ) -> ttk.Label:
     """
+    Create a bold section heading (HEADING size). Use `fg_colour`/`fg_shade` to customise colour.
+
     Description:
         Create a section title label with HEADING size and bold weight.
 
@@ -1972,6 +2083,8 @@ def body_text(
     **kwargs: Any,
 ) -> ttk.Label:
     """
+    Create standard body text (BODY size). Use `fg_colour`/`fg_shade` to customise colour.
+
     Description:
         Create a body text label with BODY size and normal weight.
 
@@ -2021,6 +2134,8 @@ def small_text(
     **kwargs: Any,
 ) -> ttk.Label:
     """
+    Create small caption text (SMALL size). Ideal for hints, captions, or secondary info.
+
     Description:
         Create a small text label with SMALL size and normal weight.
 
@@ -2070,6 +2185,8 @@ def meta_text(
     **kwargs: Any,
 ) -> ttk.Label:
     """
+    Create muted metadata text (SMALL size, GREY). Ideal for timestamps, versions, IDs.
+
     Description:
         Create a meta text label with SMALL size and muted colour.
         Ideal for timestamps, author names, version info, and other metadata.
@@ -2162,11 +2279,6 @@ __all__ = [
     "InputRoleType",
     "ControlWidgetType",
     "ControlVariantType",
-    # Value tuples (for iteration, re-exported from G01b)
-    "INPUT_CONTROLS",
-    "INPUT_ROLES",
-    "CONTROL_WIDGETS",
-    "CONTROL_VARIANTS",
     # Spacing tokens (re-exported from G01a for G03 consumption)
     "SPACING_XS",
     "SPACING_SM",

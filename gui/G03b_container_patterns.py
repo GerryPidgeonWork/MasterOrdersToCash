@@ -11,13 +11,16 @@
 # Relationships:
 #   - G02a_widget_primitives → make_frame, page_title, section_title, body_text, divider.
 #   - G02a_widget_primitives → type aliases (ShadeType, SpacingType, ContainerRoleType).
+#   - G02a_widget_primitives → spacing tokens (SPACING_XS, SPACING_SM, SPACING_MD).
 #   - G03b_container_patterns → container patterns (THIS MODULE).
 #
 # Architecture Rules (G03 Layer):
 #   - G03 MUST use G02a widget primitives for all styled widgets.
 #   - G03 MUST import type aliases from G02a (which re-exports from G01b).
+#   - G03 MUST import spacing tokens from G02a (which re-exports from G01a).
 #   - G03 must NEVER import from G01a or G01b directly.
 #   - G03 may apply layout (.grid/.pack) — composition layer.
+#   - G03 must NOT use .place() layout.
 #   - G03 must NOT create Tk root or implement business logic.
 #
 # Design principles:
@@ -81,7 +84,7 @@ logger = get_logger(__name__)
 # --- Additional project-level imports (append below this line only) ----------------------------------
 from gui.G00a_gui_packages import tk, ttk, init_gui_theme
 
-# Widget primitives and type aliases from G02a (G03's ONLY widget/type source)
+# Widget primitives, type aliases, and spacing tokens from G02a (G03's ONLY source)
 from gui.G02a_widget_primitives import (
     # Widget factories
     make_frame,
@@ -93,34 +96,28 @@ from gui.G02a_widget_primitives import (
     ShadeType,
     SpacingType,
     ContainerRoleType,
+    # Spacing tokens (re-exported from G01a via G02a)
+    SPACING_XS,
+    SPACING_SM,
+    SPACING_MD,
 )
 
 
 # ====================================================================================================
-# 3. LOCAL SPACING CONSTANTS
-# ----------------------------------------------------------------------------------------------------
-# G03 must NOT import spacing tokens from G01a.
-# These literal values match the G01a design system for consistency.
-# ====================================================================================================
-
-_SPACING_XS: int = 4
-_SPACING_SM: int = 8
-_SPACING_MD: int = 16
-
-
-# ====================================================================================================
-# 4. BASIC CONTAINER PATTERNS
+# 3. BASIC CONTAINER PATTERNS
 # ----------------------------------------------------------------------------------------------------
 # Simple styled container helpers.
 # ====================================================================================================
 
-def card(
+def make_card(
     parent: tk.Misc | tk.Widget,
     role: ContainerRoleType = "SECONDARY",
     shade: ShadeType = "LIGHT",
     padding: SpacingType | None = "MD",
 ) -> ttk.Frame:
     """
+    Create a card container with raised styling. Use `role`/`shade` to control appearance.
+
     Description:
         Create a card container with raised styling.
 
@@ -148,13 +145,15 @@ def card(
     return make_frame(parent, role=role, shade=shade, kind="CARD", padding=padding)
 
 
-def panel(
+def make_panel(
     parent: tk.Misc | tk.Widget,
     role: ContainerRoleType = "SECONDARY",
     shade: ShadeType = "LIGHT",
     padding: SpacingType | None = "MD",
 ) -> ttk.Frame:
     """
+    Create a panel container with solid border styling. Use `role`/`shade` to control appearance.
+
     Description:
         Create a panel container with solid border styling.
 
@@ -182,13 +181,15 @@ def panel(
     return make_frame(parent, role=role, shade=shade, kind="PANEL", padding=padding)
 
 
-def section(
+def make_section(
     parent: tk.Misc | tk.Widget,
     role: ContainerRoleType = "SECONDARY",
     shade: ShadeType = "LIGHT",
     padding: SpacingType | None = "SM",
 ) -> ttk.Frame:
     """
+    Create a section container with flat styling. Use `role`/`shade` to control appearance.
+
     Description:
         Create a section container with flat styling.
 
@@ -216,13 +217,15 @@ def section(
     return make_frame(parent, role=role, shade=shade, kind="SECTION", padding=padding)
 
 
-def surface(
+def make_surface(
     parent: tk.Misc | tk.Widget,
     role: ContainerRoleType = "SECONDARY",
     shade: ShadeType = "LIGHT",
     padding: SpacingType | None = "MD",
 ) -> ttk.Frame:
     """
+    Create a surface container with no border. Use `role`/`shade` to control appearance.
+
     Description:
         Create a surface container with no border.
 
@@ -256,15 +259,17 @@ def surface(
 # Containers with built-in title/header regions.
 # ====================================================================================================
 
-def titled_card(
+def make_titled_card(
     parent: tk.Misc | tk.Widget,
     title: str,
     role: ContainerRoleType = "SECONDARY",
     shade: ShadeType = "LIGHT",
-    title_padding: int = _SPACING_SM,
-    content_padding: int = _SPACING_MD,
+    title_padding: int = SPACING_SM,
+    content_padding: int = SPACING_MD,
 ) -> tuple[ttk.Frame, ttk.Frame]:
     """
+    Create a card with a title header and content area. Use `role`/`shade` to control appearance.
+
     Description:
         Create a card with a title header and content area.
 
@@ -293,7 +298,7 @@ def titled_card(
         - Title is rendered using section_title().
         - Content frame is where caller adds widgets.
     """
-    card_frame = card(parent, role=role, shade=shade, padding=None)
+    card_frame = make_card(parent, role=role, shade=shade, padding=None)
     card_frame.columnconfigure(0, weight=1)
     card_frame.rowconfigure(1, weight=1)
 
@@ -310,16 +315,18 @@ def titled_card(
     return card_frame, content_frame
 
 
-def titled_section(
+def make_titled_section(
     parent: tk.Misc | tk.Widget,
     title: str,
     role: ContainerRoleType = "SECONDARY",
     shade: ShadeType = "LIGHT",
-    title_padding: int = _SPACING_SM,
-    content_padding: int = _SPACING_SM,
+    title_padding: int = SPACING_SM,
+    content_padding: int = SPACING_SM,
     show_divider: bool = True,
 ) -> tuple[ttk.Frame, ttk.Frame]:
     """
+    Create a section with a title header and content area. Use `role`/`shade` to control appearance.
+
     Description:
         Create a section with a title header and content area.
 
@@ -350,7 +357,7 @@ def titled_section(
         - Title is rendered using section_title().
         - Optional divider separates title from content.
     """
-    section_frame = section(parent, role=role, shade=shade, padding=None)
+    section_frame = make_section(parent, role=role, shade=shade, padding=None)
     section_frame.columnconfigure(0, weight=1)
     section_frame.rowconfigure(2 if show_divider else 1, weight=1)
 
@@ -365,7 +372,7 @@ def titled_section(
     # Optional divider
     if show_divider:
         div = divider(section_frame)
-        div.grid(row=1, column=0, sticky="ew", pady=(_SPACING_XS, 0))
+        div.grid(row=1, column=0, sticky="ew", pady=(SPACING_XS, 0))
         current_row = 2
 
     # Content area
@@ -381,13 +388,15 @@ def titled_section(
 # Headers for pages and major sections.
 # ====================================================================================================
 
-def page_header(
+def make_page_header(
     parent: tk.Misc | tk.Widget,
     title: str,
     subtitle: str | None = None,
-    padding: int = _SPACING_MD,
+    padding: int = SPACING_MD,
 ) -> ttk.Frame:
     """
+    Create a page header with title and optional subtitle.
+
     Description:
         Create a page header with title and optional subtitle.
 
@@ -419,18 +428,20 @@ def page_header(
 
     if subtitle:
         subtitle_label = body_text(header, text=subtitle)
-        subtitle_label.pack(anchor="w", pady=(_SPACING_XS, 0))
+        subtitle_label.pack(anchor="w", pady=(SPACING_XS, 0))
 
     return header
 
 
-def page_header_with_actions(
+def make_page_header_with_actions(
     parent: tk.Misc | tk.Widget,
     title: str,
     subtitle: str | None = None,
-    padding: int = _SPACING_MD,
+    padding: int = SPACING_MD,
 ) -> tuple[ttk.Frame, ttk.Frame]:
     """
+    Create a page header with title/subtitle and an actions area for buttons.
+
     Description:
         Create a page header with title/subtitle and an actions area.
 
@@ -468,7 +479,7 @@ def page_header_with_actions(
 
     if subtitle:
         subtitle_label = body_text(title_area, text=subtitle)
-        subtitle_label.pack(anchor="w", pady=(_SPACING_XS, 0))
+        subtitle_label.pack(anchor="w", pady=(SPACING_XS, 0))
 
     # Actions area (right)
     actions_frame = ttk.Frame(header)
@@ -477,12 +488,14 @@ def page_header_with_actions(
     return header, actions_frame
 
 
-def section_header(
+def make_section_header(
     parent: tk.Misc | tk.Widget,
     title: str,
-    padding: int = _SPACING_SM,
+    padding: int = SPACING_SM,
 ) -> ttk.Frame:
     """
+    Create a section header with a title. Simpler than page header, for sub-sections.
+
     Description:
         Create a section header with a title.
 
@@ -519,7 +532,7 @@ def section_header(
 # Containers for alerts, messages, and status indicators.
 # ====================================================================================================
 
-def alert_box(
+def make_alert_box(
     parent: tk.Misc | tk.Widget,
     message: str,
     role: ContainerRoleType = "WARNING",
@@ -527,6 +540,8 @@ def alert_box(
     padding: SpacingType | None = "SM",
 ) -> ttk.Frame:
     """
+    Create an alert/notification box with a message. Use `role`/`shade` to control appearance.
+
     Description:
         Create an alert/notification box with a message.
 
@@ -553,7 +568,7 @@ def alert_box(
         - Uses panel styling for visibility.
         - Message is displayed using body_text().
     """
-    alert = panel(parent, role=role, shade=shade, padding=padding)
+    alert = make_panel(parent, role=role, shade=shade, padding=padding)
 
     msg_label = body_text(alert, text=message)
     msg_label.pack(anchor="w")
@@ -561,14 +576,16 @@ def alert_box(
     return alert
 
 
-def status_banner(
+def make_status_banner(
     parent: tk.Misc | tk.Widget,
     message: str,
     role: ContainerRoleType = "PRIMARY",
     shade: ShadeType = "LIGHT",
-    padding: int = _SPACING_SM,
+    padding: int = SPACING_SM,
 ) -> ttk.Frame:
     """
+    Create a full-width status banner. Use `role`/`shade` to control appearance.
+
     Description:
         Create a full-width status banner.
 
@@ -595,7 +612,7 @@ def status_banner(
         - Intended to span full width of parent.
         - Use for page-level notifications.
     """
-    banner = section(parent, role=role, shade=shade, padding=None)
+    banner = make_section(parent, role=role, shade=shade, padding=None)
     banner_inner = ttk.Frame(banner, padding=padding)
     banner_inner.pack(fill="x")
 
@@ -613,20 +630,20 @@ def status_banner(
 
 __all__ = [
     # Basic containers
-    "card",
-    "panel",
-    "section",
-    "surface",
+    "make_card",
+    "make_panel",
+    "make_section",
+    "make_surface",
     # Titled containers
-    "titled_card",
-    "titled_section",
+    "make_titled_card",
+    "make_titled_section",
     # Page headers
-    "page_header",
-    "page_header_with_actions",
-    "section_header",
+    "make_page_header",
+    "make_page_header_with_actions",
+    "make_section_header",
     # Alerts/status
-    "alert_box",
-    "status_banner",
+    "make_alert_box",
+    "make_status_banner",
 ]
 
 
@@ -646,34 +663,34 @@ if __name__ == "__main__":
     root.geometry("700x600")
 
     try:
-        main = ttk.Frame(root, padding=_SPACING_MD)
+        main = ttk.Frame(root, padding=SPACING_MD)
         main.pack(fill="both", expand=True)
 
         # Page header with actions
-        header, actions = page_header_with_actions(
+        header, actions = make_page_header_with_actions(
             main, title="Dashboard", subtitle="Overview of system status"
         )
-        header.pack(fill="x", pady=(0, _SPACING_MD))
+        header.pack(fill="x", pady=(0, SPACING_MD))
         ttk.Button(actions, text="Refresh").pack(side="left", padx=2)
         ttk.Button(actions, text="Settings").pack(side="left", padx=2)
-        logger.info("page_header_with_actions() created")
+        logger.info("make_page_header_with_actions() created")
 
         # Alert box
-        alert = alert_box(main, message="This is a warning message.", role="WARNING")
-        alert.pack(fill="x", pady=(0, _SPACING_MD))
-        logger.info("alert_box() created")
+        alert = make_alert_box(main, message="This is a warning message.", role="WARNING")
+        alert.pack(fill="x", pady=(0, SPACING_MD))
+        logger.info("make_alert_box() created")
 
         # Titled card
-        card_frame, card_content = titled_card(main, title="Statistics")
-        card_frame.pack(fill="x", pady=(0, _SPACING_MD))
+        card_frame, card_content = make_titled_card(main, title="Statistics")
+        card_frame.pack(fill="x", pady=(0, SPACING_MD))
         ttk.Label(card_content, text="Card content goes here").pack(padx=10, pady=10)
-        logger.info("titled_card() created")
+        logger.info("make_titled_card() created")
 
         # Titled section
-        sec_frame, sec_content = titled_section(main, title="Recent Activity")
-        sec_frame.pack(fill="x", pady=(0, _SPACING_MD))
+        sec_frame, sec_content = make_titled_section(main, title="Recent Activity")
+        sec_frame.pack(fill="x", pady=(0, SPACING_MD))
         ttk.Label(sec_content, text="Section content goes here").pack(padx=10, pady=10)
-        logger.info("titled_section() created")
+        logger.info("make_titled_section() created")
 
         # Basic containers in a row
         row = ttk.Frame(main)
@@ -682,19 +699,19 @@ if __name__ == "__main__":
         row.columnconfigure(1, weight=1)
         row.columnconfigure(2, weight=1)
 
-        c1 = card(row, role="PRIMARY", shade="LIGHT")
-        c1.grid(row=0, column=0, sticky="nsew", padx=(0, _SPACING_SM))
+        c1 = make_card(row, role="PRIMARY", shade="LIGHT")
+        c1.grid(row=0, column=0, sticky="nsew", padx=(0, SPACING_SM))
         ttk.Label(c1, text="Card 1").pack(padx=10, pady=10)
 
-        p1 = panel(row, role="SUCCESS", shade="LIGHT")
-        p1.grid(row=0, column=1, sticky="nsew", padx=_SPACING_SM)
+        p1 = make_panel(row, role="SUCCESS", shade="LIGHT")
+        p1.grid(row=0, column=1, sticky="nsew", padx=SPACING_SM)
         ttk.Label(p1, text="Panel").pack(padx=10, pady=10)
 
-        s1 = surface(row, role="ERROR", shade="LIGHT")
-        s1.grid(row=0, column=2, sticky="nsew", padx=(_SPACING_SM, 0))
+        s1 = make_surface(row, role="ERROR", shade="LIGHT")
+        s1.grid(row=0, column=2, sticky="nsew", padx=(SPACING_SM, 0))
         ttk.Label(s1, text="Surface").pack(padx=10, pady=10)
 
-        logger.info("card(), panel(), surface() created")
+        logger.info("make_card(), make_panel(), make_surface() created")
 
         logger.info("[G03b] All smoke tests passed.")
         root.mainloop()

@@ -13,7 +13,7 @@
 #
 # Relationships:
 #   - G01b_style_base   → style initialisation (font resolution).
-#   - G02c_base_window  → window shell + scroll engine (THIS MODULE).
+#   - G02c_gui_base     → window shell + scroll engine (THIS MODULE).
 #   - G03 pages         → inherit from BaseWindow and override build_widgets().
 #
 # Design principles:

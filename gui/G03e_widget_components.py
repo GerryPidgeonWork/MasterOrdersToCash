@@ -100,11 +100,11 @@ from gui.G02a_widget_primitives import (
 
 # Container patterns from G03b
 from gui.G03b_container_patterns import (
-    card,
-    panel,
-    section,
-    page_header_with_actions,
-    alert_box,
+    make_card,
+    make_panel,
+    make_section,
+    make_page_header_with_actions,
+    make_alert_box,
 )
 
 
@@ -349,9 +349,12 @@ def metric_card(
     value: str,
     subtitle: str | None = None,
     role: Literal["PRIMARY", "SECONDARY", "SUCCESS", "WARNING", "ERROR"] = "SECONDARY",
+    shade: Literal["LIGHT", "MID", "DARK", "XDARK"] = "LIGHT",
     padding: int = SPACING_MD,
 ) -> MetricCardResult:
     """
+    Create a card displaying a single metric. Use `role`/`shade` to control appearance.
+
     Description:
         Create a card displaying a single metric.
 
@@ -366,6 +369,8 @@ def metric_card(
             Optional subtitle or description.
         role:
             Semantic colour role for the card.
+        shade:
+            Shade within the role's colour family.
         padding:
             Internal padding.
 
@@ -380,7 +385,7 @@ def metric_card(
         - Value is displayed in DISPLAY size.
         - Update value_label to change displayed value.
     """
-    card_frame = card(parent, role=role, shade="LIGHT", padding=None)
+    card_frame = make_card(parent, role=role, shade=shade, padding=None)
     inner = ttk.Frame(card_frame, padding=padding)
     inner.pack(fill="both", expand=True)
 
@@ -412,6 +417,8 @@ def metric_row(
     gap: int = SPACING_MD,
 ) -> tuple[ttk.Frame, list[MetricCardResult]]:
     """
+    Create a horizontal row of metric cards. Pass `role`/`shade` per metric in the dict.
+
     Description:
         Create a horizontal row of metric cards.
 
@@ -424,6 +431,7 @@ def metric_row(
             - value: str
             - subtitle: str (optional)
             - role: str (optional, default "SECONDARY")
+            - shade: str (optional, default "LIGHT")
         gap:
             Gap between cards.
 
@@ -451,6 +459,7 @@ def metric_row(
             value=m.get("value", ""),
             subtitle=m.get("subtitle"),
             role=m.get("role", "SECONDARY"),
+            shade=m.get("shade", "LIGHT"),
         )
         result.frame.grid(row=0, column=i, sticky="nsew", padx=padx)
         results.append(result)
@@ -468,9 +477,12 @@ def dismissible_alert(
     parent: tk.Widget,
     message: str,
     role: Literal["SUCCESS", "WARNING", "ERROR", "PRIMARY"] = "WARNING",
+    shade: Literal["LIGHT", "MID", "DARK", "XDARK"] = "LIGHT",
     on_dismiss: Callable[[], None] | None = None,
 ) -> tuple[ttk.Frame, Callable[[], None]]:
     """
+    Create an alert box with a dismiss button. Use `role`/`shade` to control appearance.
+
     Description:
         Create an alert box with a dismiss button.
 
@@ -481,6 +493,8 @@ def dismissible_alert(
             Alert message text.
         role:
             Semantic colour role.
+        shade:
+            Shade within the role's colour family.
         on_dismiss:
             Callback when dismissed.
 
@@ -495,7 +509,7 @@ def dismissible_alert(
         - Call dismiss_function to hide the alert.
         - Alert is packed when created; dismiss unpacks it.
     """
-    alert = panel(parent, role=role, shade="LIGHT", padding="SM")
+    alert = make_panel(parent, role=role, shade=shade, padding="SM")
 
     inner = ttk.Frame(alert)
     inner.pack(fill="x", expand=True)
@@ -520,8 +534,11 @@ def toast_notification(
     message: str,
     duration_ms: int = 3000,
     role: Literal["SUCCESS", "WARNING", "ERROR", "PRIMARY"] = "SUCCESS",
+    shade: Literal["LIGHT", "MID", "DARK", "XDARK"] = "LIGHT",
 ) -> ttk.Frame:
     """
+    Create a temporary toast notification that auto-dismisses. Use `role`/`shade` to control appearance.
+
     Description:
         Create a temporary toast notification that auto-dismisses.
 
@@ -534,6 +551,8 @@ def toast_notification(
             Duration in milliseconds before auto-dismiss.
         role:
             Semantic colour role.
+        shade:
+            Shade within the role's colour family.
 
     Returns:
         ttk.Frame:
@@ -546,7 +565,7 @@ def toast_notification(
         - Toast auto-hides after duration_ms.
         - Positioned at top of parent; caller may need to adjust.
     """
-    toast = section(parent, role=role, shade="LIGHT", padding="SM")
+    toast = make_section(parent, role=role, shade=shade, padding="SM")
 
     msg_lbl = body_text(toast, text=message)
     msg_lbl.pack(anchor="w")
@@ -599,7 +618,7 @@ def action_header(
         - Title on left, actions on right.
         - Uses page_header_with_actions internally.
     """
-    header, actions_frame = page_header_with_actions(
+    header, actions_frame = make_page_header_with_actions(
         parent, title=title, subtitle=subtitle
     )
 

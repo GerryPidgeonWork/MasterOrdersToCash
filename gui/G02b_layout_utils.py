@@ -106,6 +106,7 @@ def layout_row(
     parent: tk.Misc,
     weights: tuple[int, ...] = (1,),
     min_height: int = 0,
+    uniform: str | None = "row_cols",
 ) -> ttk.Frame:
     """
     Description:
@@ -122,6 +123,11 @@ def layout_row(
         min_height:
             Optional minimum height in pixels. If > 0, configures row 0
             with minsize.
+        uniform:
+            Optional uniform group name. When set, columns share the same
+            base size and weights scale proportionally. Set to None to
+            disable uniform sizing (columns will size based on content).
+            Default is "row_cols" for proportional sizing.
 
     Returns:
         ttk.Frame:
@@ -133,11 +139,16 @@ def layout_row(
     Notes:
         - Does NOT apply any styling — use frame_style() from G02a for that.
         - The frame is NOT gridded/packed; caller must place it.
+        - The uniform parameter ensures columns respect weight ratios
+          regardless of content size.
     """
     frame = ttk.Frame(parent)
 
     for col_index, weight in enumerate(weights):
-        frame.columnconfigure(col_index, weight=weight)
+        if uniform:
+            frame.columnconfigure(col_index, weight=weight, uniform=uniform)
+        else:
+            frame.columnconfigure(col_index, weight=weight)
 
     if min_height > 0:
         frame.rowconfigure(0, minsize=min_height)

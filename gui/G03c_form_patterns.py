@@ -75,23 +75,24 @@ logger = get_logger(__name__)
 # --- Additional project-level imports (append below this line only) ----------------------------------
 from gui.G00a_gui_packages import tk, ttk, init_gui_theme
 
-# Spacing tokens from G01a
-from gui.G01a_style_config import (
+# Widget primitives and spacing tokens from G02a (G03's ONLY source for tokens)
+# G03 must NEVER import from G01 directly - all tokens come via G02a facade.
+from gui.G02a_widget_primitives import (
+    # Spacing tokens (re-exported from G01a via G02a)
     SPACING_XS,
     SPACING_SM,
-    SPACING_MD
-)
-
-# Widget primitives from G02a
-from gui.G02a_widget_primitives import (
+    SPACING_MD,
+    # Widget factories
     make_label,
     make_entry,
     make_combobox,
     make_spinbox,
     make_checkbox,
     make_button,
-    label_style_error
+    label_style_error,
 )
+
+from gui.G03b_container_patterns import make_titled_section
 
 
 # ====================================================================================================
@@ -570,10 +571,8 @@ def form_section(
         - Combines titled_section with form_group.
         - Import titled_section from G03b to avoid duplication.
     """
-    # Import here to avoid circular dependency
-    from gui.G03b_container_patterns import titled_section
 
-    outer, content = titled_section(parent, title=title, content_padding=section_padding)
+    outer, content = make_titled_section(parent, title=title, content_padding=section_padding)
 
     result = form_group(content, fields=fields, label_width=label_width, row_spacing=row_spacing)
 
