@@ -1,18 +1,17 @@
 # ====================================================================================================
-# G01b_style_base.py
+# G01b_style_base.py                                                                     [v1.0.0]
 # ----------------------------------------------------------------------------------------------------
 # Shared utilities module for the GUI Framework design system.
 #
 # Purpose:
-#   - Provide type aliases for type-safe style resolution parameters.
+#   - Re-export type aliases and tokens from G01a for downstream modules.
 #   - Resolve the active font family from the font family cascade.
 #   - Create and cache Tk named fonts for text styling.
 #   - Provide colour utilities (reverse lookup from hex to semantic names).
 #   - Provide a shared cache-key builder for all G01c–G01f resolvers.
-#   - Re-export commonly needed constants and registries from G01a.
 #
 # Architecture:
-#   - G01a  → design tokens (pure data, all colours + typography)
+#   - G01a  → design tokens (pure data, all colours + typography + Literal types)
 #   - G01b  → shared internal engine (fonts, colour classification, cache keys)
 #   - G01c–f → domain-specific style resolvers using G01b utilities
 #
@@ -21,11 +20,12 @@
 #   • NO widget creation
 #   • NO ttk.Style registration
 #   • NO design tokens (all come from G01a)
+#   • NO Literal type definitions (all come from G01a)
 #
 # ----------------------------------------------------------------------------------------------------
 # Author:       Gerry Pidgeon
-# Created:      2025-12-02
-# Project:      GUI Framework v1.0
+# Created:      2025-12-12
+# Project:      SimpleTk v1.0
 # ====================================================================================================
 
 
@@ -77,64 +77,73 @@ logger = get_logger(__name__)
 
 # --- Additional project-level imports (append below this line only) ----------------------------------
 from gui.G00a_gui_packages import tkFont, ttk
+
+# --- G01a imports (single source of truth for all tokens and Literal types) -------------------------
 from gui.G01a_style_config import (
+    # Typography
     GUI_FONT_FAMILY,
+    GUI_FONT_FAMILY_MONO,
     FONT_SIZES,
+    # Colour families (for bg_colour)
     GUI_PRIMARY,
     GUI_SECONDARY,
     GUI_SUCCESS,
     GUI_WARNING,
     GUI_ERROR,
-    GUI_TEXT,
     COLOUR_FAMILIES,
     SHADE_NAMES,
-    TEXT_SHADE_NAMES,
-    BORDER_WEIGHTS,
+    # Text colours (for fg_colour)
+    TEXT_COLOURS,
+    TEXT_COLOUR_NAMES,
+    # Spacing
+    SPACING_UNIT,
     SPACING_SCALE,
-    # Re-exports for G01f (control styles)
-    TEXT_COLOUR_GREY,
-    TEXT_COLOUR_WHITE,
-    CONTROL_INDICATOR_GAP,
+    SPACING_XS,
+    SPACING_SM,
+    SPACING_MD,
+    SPACING_LG,
+    SPACING_XL,
+    SPACING_XXL,
+    # Borders
+    BORDER_WEIGHTS,
+    BORDER_NONE,
+    BORDER_THIN,
+    BORDER_MEDIUM,
+    BORDER_THICK,
+    # Literal types - core
+    ShadeType,
+    TextColourType,
+    SizeType,
+    ColourFamilyName,
+    BorderWeightType,
+    SpacingType,
+    # Literal types - container
+    ContainerRoleType,
+    ContainerKindType,
+    CONTAINER_ROLES,
+    CONTAINER_KINDS,
+    # Literal types - input
+    InputControlType,
+    InputRoleType,
+    INPUT_CONTROLS,
+    INPUT_ROLES,
+    # Literal types - control
+    ControlWidgetType,
+    ControlVariantType,
+    CONTROL_WIDGETS,
+    CONTROL_VARIANTS,
 )
 
 
 # ====================================================================================================
 # 3. TYPE ALIASES
 # ----------------------------------------------------------------------------------------------------
-# G01b is the SINGLE SOURCE OF TRUTH for all Literal type aliases in the GUI framework.
-# All other modules (G01c-f, G02a, G03) must import these types from G01b.
+# Core Literal types are defined in G01a and imported above.
+# G01b only defines composite types that combine G01a primitives.
 # ====================================================================================================
 
-# --- Shade and size types ---
-ShadeType = Literal["LIGHT", "MID", "DARK", "XDARK"]
-TextShadeType = Literal["BLACK", "WHITE", "GREY", "PRIMARY", "SECONDARY"]
-SizeType = Literal["DISPLAY", "HEADING", "TITLE", "BODY", "SMALL"]
-
-# --- Colour family types ---
+# --- Colour family type (dict structure for bg_colour families) ---
 ColourFamily = dict[str, str]
-ColourFamilyName = Literal["PRIMARY", "SECONDARY", "SUCCESS", "WARNING", "ERROR", "TEXT"]
-
-# --- Border and spacing types ---
-BorderWeightType = Literal["NONE", "THIN", "MEDIUM", "THICK"]
-SpacingType = Literal["XS", "SM", "MD", "LG", "XL", "XXL"]
-
-# --- Container types (used by G01d, G02a, G03b) ---
-ContainerRoleType = Literal["PRIMARY", "SECONDARY", "SUCCESS", "WARNING", "ERROR"]
-ContainerKindType = Literal["SURFACE", "CARD", "PANEL", "SECTION"]
-
-# --- Input types (used by G01e, G02a) ---
-InputControlType = Literal["ENTRY", "COMBOBOX", "SPINBOX"]
-INPUT_CONTROLS: tuple[InputControlType, ...] = ("ENTRY", "COMBOBOX", "SPINBOX")
-
-InputRoleType = Literal["PRIMARY", "SECONDARY", "SUCCESS", "WARNING", "ERROR"]
-INPUT_ROLES: tuple[InputRoleType, ...] = ("PRIMARY", "SECONDARY", "SUCCESS", "WARNING", "ERROR")
-
-# --- Control types (used by G01f, G02a) ---
-ControlWidgetType = Literal["BUTTON", "CHECKBOX", "RADIO", "SWITCH"]
-CONTROL_WIDGETS: tuple[ControlWidgetType, ...] = ("BUTTON", "CHECKBOX", "RADIO", "SWITCH")
-
-ControlVariantType = Literal["PRIMARY", "SECONDARY", "SUCCESS", "WARNING", "ERROR"]
-CONTROL_VARIANTS: tuple[ControlVariantType, ...] = ("PRIMARY", "SECONDARY", "SUCCESS", "WARNING", "ERROR")
 
 
 # ====================================================================================================
@@ -142,7 +151,6 @@ CONTROL_VARIANTS: tuple[ControlVariantType, ...] = ("PRIMARY", "SECONDARY", "SUC
 # ----------------------------------------------------------------------------------------------------
 
 FONT_FAMILY_FALLBACK: str = "Arial"
-TEXT_COLOURS = GUI_TEXT  # Alias required by spec
 
 
 # ====================================================================================================
@@ -159,12 +167,17 @@ def resolve_font_family() -> str:
         Resolve the first available font family from GUI_FONT_FAMILY.
         Falls back to FONT_FAMILY_FALLBACK if no preferred font is present.
 
+    Args:
+        None.
+
     Returns:
         str: Active font family name.
 
+    Raises:
+        None.
+
     Notes:
-        - Requires an existing Tk root.
-        - Cached after first resolution.
+        Requires an existing Tk root. Cached after first resolution.
     """
     global FONT_FAMILY_RESOLVED
 
@@ -174,7 +187,7 @@ def resolve_font_family() -> str:
     try:
         available = set(tkFont.families())
     except Exception as exc:
-        logger.warning(f"[G01b] Unable to query font families: {exc}")
+        logger.warning("[G01b] Unable to query font families: %s", exc)
         FONT_FAMILY_RESOLVED = FONT_FAMILY_FALLBACK
         return FONT_FAMILY_RESOLVED
 
@@ -184,7 +197,7 @@ def resolve_font_family() -> str:
             return name
 
     FONT_FAMILY_RESOLVED = FONT_FAMILY_FALLBACK
-    return FONT_FAMILY_RESOLVED
+    return FONT_FAMILY_FALLBACK
 
 
 def make_font_key(
@@ -195,29 +208,22 @@ def make_font_key(
 ) -> str:
     """
     Description:
-        Construct a deterministic key for naming Tk fonts. This ensures that
-        fonts with identical configuration share the same cache entry.
+        Construct a deterministic key for naming Tk fonts.
 
     Args:
-        size (str):
-            The size token ("DISPLAY", "HEADING", "TITLE", "BODY", "SMALL").
-        bold (bool):
-            Whether the font is bold.
-        underline (bool):
-            Whether the font has an underline.
-        italic (bool):
-            Whether the font is italic.
+        size: Size token (DISPLAY, HEADING, TITLE, BODY, SMALL).
+        bold: Whether the font is bold.
+        underline: Whether the font has an underline.
+        italic: Whether the font is italic.
 
     Returns:
-        str:
-            A canonical font key, e.g. "Font_BODY", "Font_TITLE_BU".
+        str: A canonical font key, e.g. "Font_BODY", "Font_TITLE_BU".
 
     Raises:
         None.
 
     Notes:
-        - Used by resolve_text_font() to ensure caching correctness.
-        - Keys are human-readable and stable across sessions.
+        Used by resolve_text_font() to ensure caching correctness.
     """
     size_token = size.upper()
     flags = "".join(
@@ -235,32 +241,23 @@ def create_named_font(
 ) -> tkFont.Font:
     """
     Description:
-        Create a Tk named font using the resolved font family and the pixel
-        sizes defined in FONT_SIZES.
+        Create a Tk named font using the resolved font family.
 
     Args:
-        key (str):
-            The name to assign to the Tk named font.
-        size (str):
-            A size token from FONT_SIZES (e.g., "BODY", "TITLE").
-        bold (bool):
-            Whether the font should be rendered in bold weight.
-        underline (bool):
-            Whether the font should include an underline.
-        italic (bool):
-            Whether the font should use an italic slant.
+        key: The name to assign to the Tk named font.
+        size: A size token from FONT_SIZES (e.g., "BODY", "TITLE").
+        bold: Whether the font should be rendered in bold weight.
+        underline: Whether the font should include an underline.
+        italic: Whether the font should use an italic slant.
 
     Returns:
-        tkFont.Font:
-            The created Tk named font instance.
+        tkFont.Font: The created Tk named font instance.
 
     Raises:
         None.
 
     Notes:
-        - Assumes that a Tk root has already been created.
-        - The returned font is registered globally under the specified name.
-        - No caching is performed here; caching is handled by resolve_text_font().
+        Assumes a Tk root exists. No caching here; use resolve_text_font().
     """
     family = resolve_font_family()
     pixel_size = FONT_SIZES.get(size.upper(), FONT_SIZES["BODY"])
@@ -285,8 +282,20 @@ def resolve_text_font(
     Description:
         Get or create a Tk named font and return its font key.
 
+    Args:
+        size: Size token (DISPLAY, HEADING, TITLE, BODY, SMALL).
+        bold: Whether the font should be bold.
+        underline: Whether the font should have an underline.
+        italic: Whether the font should be italic.
+
     Returns:
-        str: Tk font name.
+        str: The Tk font name (cache key).
+
+    Raises:
+        None.
+
+    Notes:
+        Creates the font if not already cached. Requires an existing Tk root.
     """
     key = make_font_key(size, bold, underline, italic)
 
@@ -302,8 +311,17 @@ def get_font_cache_info() -> dict:
     Description:
         Inspect current font cache contents.
 
+    Args:
+        None.
+
     Returns:
-        dict: Summary info.
+        dict: Summary containing count, keys, and resolved family.
+
+    Raises:
+        None.
+
+    Notes:
+        Useful for debugging font resolution.
     """
     return {
         "count": len(FONT_CACHE),
@@ -316,6 +334,18 @@ def clear_font_cache() -> None:
     """
     Description:
         Clear both resolved font family and font cache.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+
+    Raises:
+        None.
+
+    Notes:
+        Resets FONT_FAMILY_RESOLVED to None. Next call will re-resolve.
     """
     global FONT_FAMILY_RESOLVED
     FONT_FAMILY_RESOLVED = None
@@ -330,25 +360,19 @@ def clear_font_cache() -> None:
 def detect_colour_family_name(colour_family: ColourFamily | None) -> str:
     """
     Description:
-        Infer the logical family name for a given colour-family dictionary,
-        using COLOUR_FAMILIES from G01a.
+        Infer the logical family name for a given colour-family dictionary.
 
     Args:
-        colour_family:
-            A colour family dictionary (e.g., GUI_PRIMARY, GUI_TEXT), or None.
+        colour_family: A colour family dictionary (e.g., GUI_PRIMARY), or None.
 
     Returns:
-        str:
-            The registered family name ("PRIMARY", "SECONDARY", "SUCCESS",
-            "WARNING", "ERROR", "TEXT"), or "CUSTOM" if unrecognised,
-            or "NONE" if colour_family is None.
+        str: Family name (PRIMARY, SECONDARY, etc.), CUSTOM, or NONE.
 
     Raises:
         None.
 
     Notes:
-        - This is the single source of truth for family-name detection.
-        - G01c, G01d, G01e, G01f should all import this function.
+        Single source of truth for family-name detection. Used by G01c-f.
     """
     if colour_family is None:
         return "NONE"
@@ -363,22 +387,19 @@ def detect_colour_family_name(colour_family: ColourFamily | None) -> str:
 def classify_colour(col: str | None) -> tuple[str, str] | None:
     """
     Description:
-        Map a hex colour to (FAMILY, SHADE). Returns ("CUSTOM", value_without_hash)
-        if the colour doesn't belong to any family.
+        Map a hex colour to (FAMILY, SHADE) or (TEXT, COLOUR_NAME).
 
     Args:
-        col:
-            A hex colour string (e.g., "#00A3FE") or None.
+        col: A hex colour string (e.g., "#00A3FE") or None.
 
     Returns:
-        tuple[str, str] | None:
-            A tuple of (FAMILY_NAME, SHADE_NAME), or None if col is None.
+        tuple[str, str] | None: (FAMILY_NAME, SHADE_NAME), or None if col is None.
 
     Raises:
         None.
 
     Notes:
-        - Returns ("CUSTOM", hex_without_hash) for unrecognised colours.
+        Returns ("CUSTOM", hex_without_hash) for unrecognised colours.
     """
     if col is None:
         return None
@@ -387,10 +408,16 @@ def classify_colour(col: str | None) -> tuple[str, str] | None:
     if not col.startswith("#"):
         col = f"#{col}"
 
+    # Check colour families (for bg_colour)
     for fam, shades in COLOUR_FAMILIES.items():
         for shade_name, hex_val in shades.items():
             if hex_val.upper() == col:
                 return fam, shade_name
+
+    # Check text colours (for fg_colour)
+    for colour_name, hex_val in TEXT_COLOURS.items():
+        if hex_val.upper() == col:
+            return "TEXT", colour_name
 
     return "CUSTOM", col.lstrip("#")
 
@@ -401,21 +428,69 @@ def get_colour_family(name: str) -> ColourFamily | None:
         Retrieve a colour family dictionary from COLOUR_FAMILIES by name.
 
     Args:
-        name (str):
-            The name of the colour family ("PRIMARY", "TEXT", etc.).
+        name: The name of the colour family (PRIMARY, SECONDARY, etc.).
 
     Returns:
-        dict | None:
-            The corresponding colour family dictionary, or None if not found.
+        ColourFamily | None: The colour family dictionary, or None if not found.
 
     Raises:
         None.
 
     Notes:
-        - Name lookup is case-insensitive.
-        - Returned dictionaries should be treated as read-only.
+        Name lookup is case-insensitive. Does not return TEXT_COLOURS.
     """
     return COLOUR_FAMILIES.get(name.upper())
+
+
+def resolve_colour(colour: str | ColourFamily | None) -> ColourFamily | None:
+    """
+    Description:
+        Convert a colour input to a colour family dictionary.
+
+    Args:
+        colour: String preset name, colour family dict, or None.
+
+    Returns:
+        ColourFamily | None: Resolved colour family, or None.
+
+    Raises:
+        None.
+
+    Notes:
+        String lookup is case-insensitive. Dict input returned as-is.
+    """
+    if colour is None:
+        return None
+    if isinstance(colour, dict):
+        return colour
+    if isinstance(colour, str):
+        return COLOUR_FAMILIES.get(colour.upper())
+    return None
+
+
+def get_default_shade(colour_family: ColourFamily | None) -> ShadeType:
+    """
+    Description:
+        Return the sensible default shade for a colour family.
+
+    Args:
+        colour_family: A colour family dictionary, or None.
+
+    Returns:
+        ShadeType: The default shade token ("MID").
+
+    Raises:
+        None.
+
+    Notes:
+        Returns "MID" for all families (safe fallback).
+    """
+    if colour_family is None:
+        return "MID"
+    if "MID" in colour_family:
+        return "MID"
+    # Fallback: return first available shade
+    return cast(ShadeType, list(colour_family.keys())[0])
 
 
 # ====================================================================================================
@@ -425,62 +500,57 @@ def get_colour_family(name: str) -> ColourFamily | None:
 def build_style_cache_key(category: str, *segments: str) -> str:
     """
     Description:
-        Combine a primary category with ordered detail segments to produce
-        a deterministic style-cache key used by G01c–G01f.
+        Combine a category with segments to produce a deterministic style-cache key.
 
     Args:
-        category (str):
-            The top-level key, such as "Text", "Container", "Input".
-        *segments (str):
-            Any number of additional identifying strings such as family,
-            shade, size tokens, or booleans rendered as letters.
+        category: Top-level key (Text, Container, Input).
+        *segments: Additional identifying strings (family, shade, size, etc.).
 
     Returns:
-        str:
-            A stable key in the format "Category_seg1_seg2_...".
+        str: Stable key in format "Category_seg1_seg2_...".
 
     Raises:
         None.
 
     Notes:
-        - Empty strings and None values are ignored.
-        - Order of segments is preserved to avoid collisions.
-        - All calls across the framework must use this canonical key builder.
+        Empty strings and None values are ignored. Order preserved.
     """
     cleaned = [s for s in segments if s not in (None, "")]
     return category if not cleaned else f"{category}_{'_'.join(cleaned)}"
 
 
 # ====================================================================================================
-# 9. PUBLIC API
+# 8. PUBLIC API
 # ----------------------------------------------------------------------------------------------------
 
 __all__ = [
-    # Type aliases - core
+    # Type aliases - core (re-exported from G01a)
     "ShadeType",
-    "TextShadeType",
+    "TextColourType",
     "SizeType",
-    "ColourFamily",
     "ColourFamilyName",
     "BorderWeightType",
     "SpacingType",
-    # Type aliases - container (G01d, G02a, G03b)
+    # Type aliases - container (re-exported from G01a)
     "ContainerRoleType",
     "ContainerKindType",
-    # Type aliases - input (G01e, G02a)
+    # Type aliases - input (re-exported from G01a)
     "InputControlType",
     "InputRoleType",
-    # Type aliases - control (G01f, G02a)
+    # Type aliases - control (re-exported from G01a)
     "ControlWidgetType",
     "ControlVariantType",
-    # Value tuples (for iteration)
+    # Type aliases - local (composite type)
+    "ColourFamily",
+    # Value tuples (re-exported from G01a)
+    "CONTAINER_ROLES",
+    "CONTAINER_KINDS",
     "INPUT_CONTROLS",
     "INPUT_ROLES",
     "CONTROL_WIDGETS",
     "CONTROL_VARIANTS",
     # Constants
     "FONT_FAMILY_FALLBACK",
-    "TEXT_COLOURS",
     # Font engine
     "resolve_font_family",
     "make_font_key",
@@ -492,30 +562,45 @@ __all__ = [
     "detect_colour_family_name",
     "classify_colour",
     "get_colour_family",
+    "resolve_colour",
+    "get_default_shade",
     # Shared cache key builder
     "build_style_cache_key",
-    # Re-exports from G01a
+    # Re-exports from G01a - Typography
+    "GUI_FONT_FAMILY",
+    "GUI_FONT_FAMILY_MONO",
+    "FONT_SIZES",
+    # Re-exports from G01a - Colour families (bg_colour)
     "GUI_PRIMARY",
     "GUI_SECONDARY",
     "GUI_SUCCESS",
     "GUI_WARNING",
     "GUI_ERROR",
-    "GUI_TEXT",
     "COLOUR_FAMILIES",
-    "FONT_SIZES",
     "SHADE_NAMES",
-    "TEXT_SHADE_NAMES",
-    "BORDER_WEIGHTS",
+    # Re-exports from G01a - Text colours (fg_colour)
+    "TEXT_COLOURS",
+    "TEXT_COLOUR_NAMES",
+    # Re-exports from G01a - Spacing
+    "SPACING_UNIT",
     "SPACING_SCALE",
-    # Re-exports for G01f (control styles)
-    "TEXT_COLOUR_GREY",
-    "TEXT_COLOUR_WHITE",
-    "CONTROL_INDICATOR_GAP",
+    "SPACING_XS",
+    "SPACING_SM",
+    "SPACING_MD",
+    "SPACING_LG",
+    "SPACING_XL",
+    "SPACING_XXL",
+    # Re-exports from G01a - Borders
+    "BORDER_WEIGHTS",
+    "BORDER_NONE",
+    "BORDER_THIN",
+    "BORDER_MEDIUM",
+    "BORDER_THICK",
 ]
 
 
 # ====================================================================================================
-# 10. SELF-TEST
+# 9. SELF-TEST
 # ----------------------------------------------------------------------------------------------------
 
 if __name__ == "__main__":
@@ -527,17 +612,98 @@ if __name__ == "__main__":
     root = tk.Tk()
     root.withdraw()
 
-    logger.info("Resolved font family: %s", resolve_font_family())
-    logger.info("Font key BODY: %s", resolve_text_font("BODY"))
-    logger.info("Font key HEADING/B: %s", resolve_text_font("HEADING", bold=True))
+    try:
+        # Test font resolution
+        family = resolve_font_family()
+        logger.info("Resolved font family: %s", family)
+        assert family is not None, "Font family should not be None"
 
-    logger.info("colour classification (PRIMARY MID): %s",
-                classify_colour(GUI_PRIMARY["MID"]))
-    logger.info("colour classification (TEXT BLACK): %s",
-                classify_colour(GUI_TEXT["BLACK"]))
+        # Test font key generation
+        font_key = resolve_text_font("BODY")
+        logger.info("Font key BODY: %s", font_key)
+        assert font_key == "Font_BODY", f"Expected 'Font_BODY', got '{font_key}'"
 
-    logger.info("Sample style key: %s",
-                build_style_cache_key("Text", "fgPRIMARY", "MID", "BODY", "B"))
+        font_key_bold = resolve_text_font("HEADING", bold=True)
+        logger.info("Font key HEADING/B: %s", font_key_bold)
+        assert font_key_bold == "Font_HEADING_B", f"Expected 'Font_HEADING_B', got '{font_key_bold}'"
 
-    logger.info("[G01b] Self-test complete.")
-    root.destroy()
+        # Test make_font_key
+        key = make_font_key("TITLE", bold=True, underline=True)
+        logger.info("make_font_key TITLE/BU: %s", key)
+        assert key == "Font_TITLE_BU", f"Expected 'Font_TITLE_BU', got '{key}'"
+
+        # Test get_font_cache_info
+        cache_info = get_font_cache_info()
+        logger.info("Font cache info: %s", cache_info)
+        assert cache_info["count"] >= 2, "Cache should have at least 2 fonts"
+        assert "Font_BODY" in cache_info["keys"], "Cache should contain Font_BODY"
+
+        # Test colour classification (bg_colour)
+        classification = classify_colour(GUI_PRIMARY["MID"])
+        logger.info("Colour classification (PRIMARY MID): %s", classification)
+        assert classification == ("PRIMARY", "MID"), f"Expected ('PRIMARY', 'MID'), got {classification}"
+
+        # Test colour classification (fg_colour)
+        classification_text = classify_colour(TEXT_COLOURS["BLACK"])
+        logger.info("Colour classification (TEXT BLACK): %s", classification_text)
+        assert classification_text == ("TEXT", "BLACK"), f"Expected ('TEXT', 'BLACK'), got {classification_text}"
+
+        # Test detect_colour_family_name
+        family_name = detect_colour_family_name(GUI_PRIMARY)
+        logger.info("Detected family name for GUI_PRIMARY: %s", family_name)
+        assert family_name == "PRIMARY", f"Expected 'PRIMARY', got '{family_name}'"
+
+        family_name_none = detect_colour_family_name(None)
+        assert family_name_none == "NONE", f"Expected 'NONE', got '{family_name_none}'"
+
+        # Test get_colour_family
+        primary_family = get_colour_family("PRIMARY")
+        logger.info("get_colour_family('PRIMARY'): %s", primary_family is not None)
+        assert primary_family is GUI_PRIMARY, "Should return GUI_PRIMARY"
+
+        unknown_family = get_colour_family("UNKNOWN")
+        assert unknown_family is None, "Unknown family should return None"
+
+        # Test resolve_colour
+        resolved = resolve_colour("SUCCESS")
+        logger.info("resolve_colour('SUCCESS'): %s", resolved is not None)
+        assert resolved is GUI_SUCCESS, "Should return GUI_SUCCESS"
+
+        resolved_dict = resolve_colour(GUI_WARNING)
+        assert resolved_dict is GUI_WARNING, "Dict input should return same dict"
+
+        resolved_none = resolve_colour(None)
+        assert resolved_none is None, "None input should return None"
+
+        # Test get_default_shade
+        shade = get_default_shade(GUI_PRIMARY)
+        logger.info("get_default_shade(GUI_PRIMARY): %s", shade)
+        assert shade == "MID", f"Expected 'MID', got '{shade}'"
+
+        # Test build_style_cache_key
+        style_key = build_style_cache_key("Text", "fgPRIMARY", "MID", "BODY", "B")
+        logger.info("Sample style key: %s", style_key)
+        assert style_key == "Text_fgPRIMARY_MID_BODY_B", f"Unexpected key: {style_key}"
+
+        # Test clear_font_cache
+        clear_font_cache()
+        cache_info_after = get_font_cache_info()
+        assert cache_info_after["count"] == 0, "Cache should be empty after clear"
+        logger.info("clear_font_cache() works correctly")
+
+        # Verify Literal types are accessible (imported from G01a)
+        logger.info("ContainerRoleType values: %s", CONTAINER_ROLES)
+        logger.info("ContainerKindType values: %s", CONTAINER_KINDS)
+        logger.info("InputControlType values: %s", INPUT_CONTROLS)
+        logger.info("InputRoleType values: %s", INPUT_ROLES)
+        logger.info("ControlWidgetType values: %s", CONTROL_WIDGETS)
+        logger.info("ControlVariantType values: %s", CONTROL_VARIANTS)
+
+        logger.info("[G01b] All self-tests passed.")
+
+    except Exception as exc:
+        log_exception(exc, logger, "G01b self-test")
+
+    finally:
+        root.destroy()
+        logger.info("[G01b] Self-test complete.")

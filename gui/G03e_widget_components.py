@@ -1,5 +1,5 @@
 # ====================================================================================================
-# G03e_widget_components.py
+# G03e_widget_components.py                                                              [v1.0.0]
 # ----------------------------------------------------------------------------------------------------
 # Composite widget components for the GUI framework.
 #
@@ -8,23 +8,10 @@
 #   - Provide ready-to-use UI components: filter bars, metrics cards, alert banners, etc.
 #   - Enable rapid application development with consistent styling.
 #
-# Relationships:
-#   - G02a_widget_primitives  -> widget factories.
-#   - G03a_layout_patterns    -> layout patterns.
-#   - G03b_container_patterns -> container patterns.
-#   - G03c_form_patterns      -> form patterns.
-#   - G03e_widget_components  -> composite components (THIS MODULE).
-#
-# Design principles:
-#   - Components return the top-level container widget.
-#   - Optionally return structured handles to key child widgets.
-#   - Avoid hardcoding business copy; allow text to be passed in.
-#   - Keep each component cohesive and focused.
-#
 # ----------------------------------------------------------------------------------------------------
 # Author:       Gerry Pidgeon
-# Created:      2025-12-03
-# Project:      GUI Framework v1.0
+# Created:      2025-12-12
+# Project:      SimpleTk v1.0
 # ====================================================================================================
 
 
@@ -77,69 +64,32 @@ logger = get_logger(__name__)
 # --- Additional project-level imports (append below this line only) ----------------------------------
 from gui.G00a_gui_packages import tk, ttk, init_gui_theme
 
-# Widget primitives and spacing tokens from G02a (G03's ONLY source for tokens)
-# G03 must NEVER import from G01 directly - all tokens come via G02a facade.
 from gui.G02a_widget_primitives import (
-    # Spacing tokens
-    SPACING_XS,
-    SPACING_SM,
-    SPACING_MD,
-    SPACING_LG,
-    # Widget factories
-    make_label,
-    make_entry,
-    make_combobox,
-    make_button,
-    make_frame,
-    page_title,
-    section_title,
-    body_text,
-    small_text,
-    divider,
+    SPACING_XS, SPACING_SM, SPACING_MD, SPACING_LG,
+    make_label, make_entry, make_combobox, make_button, make_frame,
+    page_title, section_title, body_text, small_text, divider,
 )
 
-# Container patterns from G03b
 from gui.G03b_container_patterns import (
-    make_card,
-    make_panel,
-    make_section,
-    make_page_header_with_actions,
-    make_alert_box,
+    make_card, make_panel, make_section, make_page_header_with_actions, make_alert_box,
 )
 
 
 # ====================================================================================================
 # 3. TYPE DEFINITIONS
-# ----------------------------------------------------------------------------------------------------
-# Type definitions for component results.
 # ====================================================================================================
 
 @dataclass
 class FilterBarResult:
     """
-    Description:
-        Result container for filter bar component.
+    Result container for filter bar component.
 
-    Args:
-        frame:
-            The filter bar frame.
-        filters:
-            Dictionary mapping filter names to widgets.
-        variables:
-            Dictionary mapping filter names to tk variables.
-        search_button:
-            The search/apply button widget.
-        clear_button:
-            The clear/reset button widget (if present).
-
-    Returns:
-        None.
-
-    Raises:
-        None.
-
-    Notes:
-        - Use variables dict to get/set filter values.
+    Attributes:
+        frame: The filter bar frame.
+        filters: Dictionary mapping filter names to widgets.
+        variables: Dictionary mapping filter names to tk variables.
+        search_button: The search/apply button widget.
+        clear_button: The clear/reset button widget (if present).
     """
     frame: ttk.Frame
     filters: dict[str, tk.Widget]
@@ -151,27 +101,13 @@ class FilterBarResult:
 @dataclass
 class MetricCardResult:
     """
-    Description:
-        Result container for metric card component.
+    Result container for metric card component.
 
-    Args:
-        frame:
-            The metric card frame.
-        value_label:
-            Label displaying the metric value.
-        title_label:
-            Label displaying the metric title.
-        subtitle_label:
-            Label displaying the subtitle (if present).
-
-    Returns:
-        None.
-
-    Raises:
-        None.
-
-    Notes:
-        - Update value_label.configure(text=...) to change displayed value.
+    Attributes:
+        frame: The metric card frame.
+        value_label: Label displaying the metric value.
+        title_label: Label displaying the metric title.
+        subtitle_label: Label displaying the subtitle (if present).
     """
     frame: ttk.Frame
     value_label: ttk.Label
@@ -181,8 +117,6 @@ class MetricCardResult:
 
 # ====================================================================================================
 # 4. FILTER BAR COMPONENTS
-# ----------------------------------------------------------------------------------------------------
-# Filter/search bar components for data filtering.
 # ====================================================================================================
 
 def filter_bar(
@@ -198,52 +132,36 @@ def filter_bar(
         Create a horizontal filter bar with search controls.
 
     Args:
-        parent:
-            The parent widget.
-        filters:
-            List of filter definitions. Each dict should have:
-            - name: str (identifier)
-            - label: str (display text)
-            - type: "entry" | "combobox" (default: "entry")
-            - options: list[str] (for combobox)
-            - width: int (optional, default 15)
-        on_search:
-            Callback when search button is clicked.
-        on_clear:
-            Callback when clear button is clicked.
-        show_clear:
-            Whether to show a clear button.
-        padding:
-            Internal padding for the bar.
+        parent: The parent widget.
+        filters: List of filter dicts with name, label, type, options, width keys.
+        on_search: Callback when search button is clicked.
+        on_clear: Callback when clear button is clicked.
+        show_clear: Whether to show a clear button.
+        padding: Internal padding for the bar.
 
     Returns:
-        FilterBarResult:
-            Container with frame, filters, variables, and buttons.
+        FilterBarResult: Container with frame, filters, variables, and buttons.
 
     Raises:
         None.
 
     Notes:
-        - Filters are arranged horizontally.
-        - Search and Clear buttons are on the right.
+        Filters arranged horizontally; Search/Clear buttons on right.
     """
     frame = ttk.Frame(parent, padding=padding)
 
     filter_widgets: dict[str, tk.Widget] = {}
     filter_vars: dict[str, tk.Variable] = {}
 
-    # Create filter controls
     for i, f in enumerate(filters):
         name = f.get("name", f"filter_{i}")
         label_text = f.get("label", name)
         filter_type = f.get("type", "entry")
         width = f.get("width", 15)
 
-        # Label
         lbl = make_label(frame, text=label_text, size="BODY")
         lbl.pack(side="left", padx=(0, SPACING_XS))
 
-        # Control
         var = tk.StringVar()
         if filter_type == "combobox":
             options = f.get("options", [])
@@ -256,16 +174,15 @@ def filter_bar(
         filter_widgets[name] = widget
         filter_vars[name] = var
 
-    # Buttons container (right side)
     btn_container = ttk.Frame(frame)
     btn_container.pack(side="right")
 
     clear_btn = None
     if show_clear:
-        clear_btn = make_button(btn_container, text="Clear", command=on_clear, variant="SECONDARY")
+        clear_btn = make_button(btn_container, text="Clear", command=on_clear, bg_colour="SECONDARY")
         clear_btn.pack(side="left", padx=(0, SPACING_SM))
 
-    search_btn = make_button(btn_container, text="Search", command=on_search, variant="PRIMARY")
+    search_btn = make_button(btn_container, text="Search", command=on_search, bg_colour="PRIMARY")
     search_btn.pack(side="left")
 
     return FilterBarResult(
@@ -288,24 +205,19 @@ def search_box(
         Create a simple search box with entry and button.
 
     Args:
-        parent:
-            The parent widget.
-        placeholder:
-            Placeholder text (shown as initial value).
-        on_search:
-            Callback with search text when button clicked.
-        width:
-            Width of the entry field.
+        parent: The parent widget.
+        placeholder: Placeholder text (shown as initial value).
+        on_search: Callback with search text when button clicked.
+        width: Width of the entry field.
 
     Returns:
-        tuple[ttk.Frame, ttk.Entry, tk.StringVar]:
-            A tuple of (frame, entry, variable).
+        tuple: (frame, entry, variable).
 
     Raises:
         None.
 
     Notes:
-        - Pressing Enter in entry also triggers search.
+        Pressing Enter in entry also triggers search.
     """
     frame = ttk.Frame(parent)
 
@@ -319,10 +231,9 @@ def search_box(
 
     entry.bind("<Return>", lambda e: do_search())
 
-    btn = make_button(frame, text="Search", command=do_search, variant="PRIMARY")
+    btn = make_button(frame, text="Search", command=do_search, bg_colour="PRIMARY")
     btn.pack(side="left")
 
-    # Clear placeholder on focus
     def on_focus_in(event: tk.Event) -> None:
         if var.get() == placeholder:
             var.set("")
@@ -339,8 +250,6 @@ def search_box(
 
 # ====================================================================================================
 # 5. METRIC CARD COMPONENTS
-# ----------------------------------------------------------------------------------------------------
-# Cards for displaying metrics and KPIs.
 # ====================================================================================================
 
 def metric_card(
@@ -353,51 +262,37 @@ def metric_card(
     padding: int = SPACING_MD,
 ) -> MetricCardResult:
     """
-    Create a card displaying a single metric. Use `role`/`shade` to control appearance.
-
     Description:
         Create a card displaying a single metric.
 
     Args:
-        parent:
-            The parent widget.
-        title:
-            Metric title/name.
-        value:
-            Metric value (displayed prominently).
-        subtitle:
-            Optional subtitle or description.
-        role:
-            Semantic colour role for the card.
-        shade:
-            Shade within the role's colour family.
-        padding:
-            Internal padding.
+        parent: The parent widget.
+        title: Metric title/name.
+        value: Metric value (displayed prominently).
+        subtitle: Optional subtitle or description.
+        role: Semantic colour role for the card.
+        shade: Shade within the role's colour family.
+        padding: Internal padding.
 
     Returns:
-        MetricCardResult:
-            Container with frame and label references.
+        MetricCardResult: Container with frame and label references.
 
     Raises:
         None.
 
     Notes:
-        - Value is displayed in DISPLAY size.
-        - Update value_label to change displayed value.
+        Value displayed in DISPLAY size. Update value_label to change value.
     """
     card_frame = make_card(parent, role=role, shade=shade, padding=None)
     inner = ttk.Frame(card_frame, padding=padding)
     inner.pack(fill="both", expand=True)
 
-    # Title (top, small)
     title_lbl = small_text(inner, text=title)
     title_lbl.pack(anchor="w")
 
-    # Value (large, prominent)
     value_lbl = page_title(inner, text=value)
     value_lbl.pack(anchor="w", pady=(SPACING_XS, 0))
 
-    # Subtitle (optional)
     subtitle_lbl = None
     if subtitle:
         subtitle_lbl = small_text(inner, text=subtitle)
@@ -417,33 +312,22 @@ def metric_row(
     gap: int = SPACING_MD,
 ) -> tuple[ttk.Frame, list[MetricCardResult]]:
     """
-    Create a horizontal row of metric cards. Pass `role`/`shade` per metric in the dict.
-
     Description:
         Create a horizontal row of metric cards.
 
     Args:
-        parent:
-            The parent widget.
-        metrics:
-            List of metric definitions. Each dict should have:
-            - title: str
-            - value: str
-            - subtitle: str (optional)
-            - role: str (optional, default "SECONDARY")
-            - shade: str (optional, default "LIGHT")
-        gap:
-            Gap between cards.
+        parent: The parent widget.
+        metrics: List of metric dicts with title, value, subtitle, role, shade keys.
+        gap: Gap between cards.
 
     Returns:
-        tuple[ttk.Frame, list[MetricCardResult]]:
-            A tuple of (row_frame, list_of_metric_results).
+        tuple: (row_frame, list_of_metric_results).
 
     Raises:
         None.
 
     Notes:
-        - Cards are evenly distributed across the row.
+        Cards are evenly distributed across the row.
     """
     row = ttk.Frame(parent)
     for i in range(len(metrics)):
@@ -469,8 +353,6 @@ def metric_row(
 
 # ====================================================================================================
 # 6. ALERT/NOTIFICATION COMPONENTS
-# ----------------------------------------------------------------------------------------------------
-# Alert banners and notification components.
 # ====================================================================================================
 
 def dismissible_alert(
@@ -481,33 +363,24 @@ def dismissible_alert(
     on_dismiss: Callable[[], None] | None = None,
 ) -> tuple[ttk.Frame, Callable[[], None]]:
     """
-    Create an alert box with a dismiss button. Use `role`/`shade` to control appearance.
-
     Description:
         Create an alert box with a dismiss button.
 
     Args:
-        parent:
-            The parent widget.
-        message:
-            Alert message text.
-        role:
-            Semantic colour role.
-        shade:
-            Shade within the role's colour family.
-        on_dismiss:
-            Callback when dismissed.
+        parent: The parent widget.
+        message: Alert message text.
+        role: Semantic colour role.
+        shade: Shade within the role's colour family.
+        on_dismiss: Callback when dismissed.
 
     Returns:
-        tuple[ttk.Frame, Callable[[], None]]:
-            A tuple of (alert_frame, dismiss_function).
+        tuple: (alert_frame, dismiss_function).
 
     Raises:
         None.
 
     Notes:
-        - Call dismiss_function to hide the alert.
-        - Alert is packed when created; dismiss unpacks it.
+        Call dismiss_function to hide the alert programmatically.
     """
     alert = make_panel(parent, role=role, shade=shade, padding="SM")
 
@@ -523,7 +396,7 @@ def dismissible_alert(
         if on_dismiss:
             on_dismiss()
 
-    dismiss_btn = make_button(inner, text="×", command=dismiss, variant="SECONDARY")
+    dismiss_btn = make_button(inner, text="×", command=dismiss, bg_colour="SECONDARY")
     dismiss_btn.grid(row=0, column=1, sticky="e", padx=(SPACING_SM, 0))
 
     return alert, dismiss
@@ -537,33 +410,24 @@ def toast_notification(
     shade: Literal["LIGHT", "MID", "DARK", "XDARK"] = "LIGHT",
 ) -> ttk.Frame:
     """
-    Create a temporary toast notification that auto-dismisses. Use `role`/`shade` to control appearance.
-
     Description:
         Create a temporary toast notification that auto-dismisses.
 
     Args:
-        parent:
-            The parent widget.
-        message:
-            Notification message text.
-        duration_ms:
-            Duration in milliseconds before auto-dismiss.
-        role:
-            Semantic colour role.
-        shade:
-            Shade within the role's colour family.
+        parent: The parent widget.
+        message: Notification message text.
+        duration_ms: Duration in milliseconds before auto-dismiss.
+        role: Semantic colour role.
+        shade: Shade within the role's colour family.
 
     Returns:
-        ttk.Frame:
-            The toast frame.
+        ttk.Frame: The toast frame.
 
     Raises:
         None.
 
     Notes:
-        - Toast auto-hides after duration_ms.
-        - Positioned at top of parent; caller may need to adjust.
+        Toast auto-hides after duration_ms. Caller may need to position.
     """
     toast = make_section(parent, role=role, shade=shade, padding="SM")
 
@@ -583,8 +447,6 @@ def toast_notification(
 
 # ====================================================================================================
 # 7. ACTION HEADER COMPONENTS
-# ----------------------------------------------------------------------------------------------------
-# Page/section headers with action buttons.
 # ====================================================================================================
 
 def action_header(
@@ -598,25 +460,19 @@ def action_header(
         Create a header with title and action buttons.
 
     Args:
-        parent:
-            The parent widget.
-        title:
-            Header title text.
-        actions:
-            List of (button_text, callback) tuples.
-        subtitle:
-            Optional subtitle text.
+        parent: The parent widget.
+        title: Header title text.
+        actions: List of (button_text, callback) tuples.
+        subtitle: Optional subtitle text.
 
     Returns:
-        tuple[ttk.Frame, dict[str, ttk.Button]]:
-            A tuple of (header_frame, buttons_dict keyed by text).
+        tuple: (header_frame, buttons_dict keyed by text).
 
     Raises:
         None.
 
     Notes:
-        - Title on left, actions on right.
-        - Uses page_header_with_actions internally.
+        Title on left, actions on right. Uses page_header_with_actions internally.
     """
     header, actions_frame = make_page_header_with_actions(
         parent, title=title, subtitle=subtitle
@@ -625,7 +481,7 @@ def action_header(
     buttons: dict[str, ttk.Button] = {}
     for i, (text, command) in enumerate(actions):
         padx = (0, SPACING_SM) if i < len(actions) - 1 else (0, 0)
-        btn = make_button(actions_frame, text=text, command=command, variant="PRIMARY")
+        btn = make_button(actions_frame, text=text, command=command, bg_colour="PRIMARY")
         btn.pack(side="left", padx=padx)
         buttons[text] = btn
 
@@ -634,8 +490,6 @@ def action_header(
 
 # ====================================================================================================
 # 8. EMPTY STATE COMPONENT
-# ----------------------------------------------------------------------------------------------------
-# Component for displaying empty/no-data states.
 # ====================================================================================================
 
 def empty_state(
@@ -651,29 +505,21 @@ def empty_state(
         Create an empty state placeholder.
 
     Args:
-        parent:
-            The parent widget.
-        title:
-            Empty state title.
-        message:
-            Descriptive message.
-        action_text:
-            Optional action button text.
-        on_action:
-            Callback for action button.
-        padding:
-            Internal padding.
+        parent: The parent widget.
+        title: Empty state title.
+        message: Descriptive message.
+        action_text: Optional action button text.
+        on_action: Callback for action button.
+        padding: Internal padding.
 
     Returns:
-        ttk.Frame:
-            The empty state frame.
+        ttk.Frame: The empty state frame.
 
     Raises:
         None.
 
     Notes:
-        - Centered within parent.
-        - Use for tables, lists, search results with no data.
+        Centered within parent. Use for tables/lists with no data.
     """
     frame = ttk.Frame(parent, padding=padding)
 
@@ -687,7 +533,7 @@ def empty_state(
     msg_lbl.pack(anchor="center", pady=(SPACING_SM, 0))
 
     if action_text and on_action:
-        btn = make_button(inner, text=action_text, command=on_action, variant="PRIMARY")
+        btn = make_button(inner, text=action_text, command=on_action, bg_colour="PRIMARY")
         btn.pack(anchor="center", pady=(SPACING_MD, 0))
 
     return frame
@@ -695,8 +541,6 @@ def empty_state(
 
 # ====================================================================================================
 # 9. PUBLIC API
-# ----------------------------------------------------------------------------------------------------
-# Expose all component functions.
 # ====================================================================================================
 
 __all__ = [
@@ -721,8 +565,6 @@ __all__ = [
 
 # ====================================================================================================
 # 10. SELF-TEST
-# ----------------------------------------------------------------------------------------------------
-# Minimal smoke test demonstrating widget components.
 # ====================================================================================================
 
 if __name__ == "__main__":
@@ -732,54 +574,80 @@ if __name__ == "__main__":
     root = tk.Tk()
     init_gui_theme()
     root.title("G03e Widget Components - Smoke Test")
-    root.geometry("800x600")
+    root.geometry("800x700")
 
     try:
         main = ttk.Frame(root, padding=SPACING_MD)
         main.pack(fill="both", expand=True)
 
-        # Action header
         header, header_btns = action_header(
             main,
             title="Dashboard",
             subtitle="Overview of system metrics",
             actions=[("Refresh", None), ("Export", None)],
         )
+        assert header is not None
+        assert len(header_btns) == 2
+        assert "Refresh" in header_btns
+        assert "Export" in header_btns
         header.pack(fill="x", pady=(0, SPACING_MD))
         logger.info("action_header() created")
 
-        # Dismissible alert
         alert, dismiss_fn = dismissible_alert(
             main, message="This is a dismissible warning alert.", role="WARNING"
         )
+        assert alert is not None
+        assert callable(dismiss_fn)
         alert.pack(fill="x", pady=(0, SPACING_MD))
         logger.info("dismissible_alert() created")
 
-        # Metric row
+        single_card = metric_card(
+            main, title="Single Metric", value="42", subtitle="Test value"
+        )
+        assert single_card.frame is not None
+        assert single_card.value_label is not None
+        assert single_card.title_label is not None
+        assert single_card.subtitle_label is not None
+        single_card.frame.pack(fill="x", pady=(0, SPACING_MD))
+        logger.info("metric_card() created")
+
         metrics_data = [
             {"title": "Total Users", "value": "1,234", "subtitle": "+12% from last month"},
             {"title": "Active Sessions", "value": "56", "role": "SUCCESS"},
             {"title": "Errors", "value": "3", "subtitle": "Last 24 hours", "role": "ERROR"},
         ]
-        metrics_row, metric_results = metric_row(main, metrics_data)
-        metrics_row.pack(fill="x", pady=(0, SPACING_MD))
+        metrics_row_frame, metric_results = metric_row(main, metrics_data)
+        assert metrics_row_frame is not None
+        assert len(metric_results) == 3
+        metrics_row_frame.pack(fill="x", pady=(0, SPACING_MD))
         logger.info("metric_row() created with %d cards", len(metric_results))
 
-        # Filter bar
         filter_defs = [
-            {"name": "status", "label": "Status", "type": "combobox", 
+            {"name": "status", "label": "Status", "type": "combobox",
              "options": ["All", "Active", "Inactive"]},
             {"name": "search", "label": "Name", "type": "entry"},
         ]
         filter_result = filter_bar(main, filters=filter_defs)
+        assert filter_result.frame is not None
+        assert len(filter_result.filters) == 2
+        assert len(filter_result.variables) == 2
+        assert filter_result.search_button is not None
+        assert filter_result.clear_button is not None
+        assert "status" in filter_result.filters
+        assert "search" in filter_result.filters
         filter_result.frame.pack(fill="x", pady=(0, SPACING_MD))
         logger.info("filter_bar() created")
 
-        # Divider
-        div = divider(main)
-        div.pack(fill="x", pady=SPACING_MD)
+        search_frame, search_entry, search_var = search_box(
+            main, placeholder="Search users...", on_search=lambda s: logger.info("Search: %s", s)
+        )
+        assert search_frame is not None
+        assert search_entry is not None
+        assert search_var is not None
+        assert search_var.get() == "Search users..."
+        search_frame.pack(fill="x", pady=(0, SPACING_MD))
+        logger.info("search_box() created")
 
-        # Empty state
         empty = empty_state(
             main,
             title="No results",
@@ -787,10 +655,18 @@ if __name__ == "__main__":
             action_text="Clear Filters",
             on_action=lambda: logger.info("Clear filters clicked"),
         )
-        empty.pack(fill="both", expand=True)
+        assert empty is not None
+        empty.pack(fill="x", pady=(0, SPACING_MD))
         logger.info("empty_state() created")
 
-        logger.info("[G03e] All smoke tests passed.")
+        toast = toast_notification(
+            main, message="This is a toast notification!", duration_ms=5000, role="SUCCESS"
+        )
+        assert toast is not None
+        toast.pack(fill="x", pady=(0, SPACING_MD))
+        logger.info("toast_notification() created (will auto-dismiss in 5s)")
+
+        logger.info("[G03e] All assertions passed (8 functions tested).")
         root.mainloop()
 
     except Exception as exc:

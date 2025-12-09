@@ -1,11 +1,11 @@
 # ====================================================================================================
-# G01e_input_styles.py
+# G01e_input_styles.py                                                                   [v1.0.0]
 # ----------------------------------------------------------------------------------------------------
 # Input style resolver for ttk.Entry, ttk.Combobox, ttk.Spinbox and similar field widgets.
 #
 # Purpose:
 #   - Provide a parametric, cached input-style engine for the GUI framework.
-#   - Turn high-level semantic parameters (role, shade, border, padding)
+#   - Turn high-level semantic parameters (bg_colour, bg_shade, fg_colour, border, padding)
 #     into concrete ttk styles for form controls.
 #   - Keep ALL input/field styling logic in one place.
 #
@@ -23,24 +23,15 @@
 #     the same style name.
 #   - No raw hex values: ALL colours come from G01a tokens.
 #
-# Style naming pattern (via build_style_cache_key in G01b), e.g.:
-#   Input_ENTRY_role_SECONDARY_LIGHT_border_THIN_pad_SM
-#
-#   CONTROL TYPE:
-#       ENTRY, COMBOBOX, SPINBOX
-#   ROLE values:
-#       PRIMARY, SECONDARY, SUCCESS, WARNING, ERROR
-#   SHADE values:
-#       LIGHT, MID, DARK, XDARK
-#   BORDER WEIGHTS:
-#       NONE, THIN, MEDIUM, THICK
-#   PADDING TOKENS:
-#       XS, SM, MD, LG, XL, XXL, NONE
+# Colour API:
+#   - fg_colour: TextColourType (BLACK, WHITE, GREY, PRIMARY, SECONDARY, SUCCESS, ERROR, WARNING)
+#   - bg_colour: ColourFamilyName (PRIMARY, SECONDARY, SUCCESS, WARNING, ERROR)
+#   - bg_shade: ShadeType (LIGHT, MID, DARK, XDARK)
 #
 # ----------------------------------------------------------------------------------------------------
 # Author:       Gerry Pidgeon
-# Created:      2025-12-02
-# Project:      GUI Framework v1.0
+# Created:      2025-12-12
+# Project:      SimpleTk v1.0
 # ====================================================================================================
 
 
@@ -97,15 +88,19 @@ from gui.G00a_gui_packages import tk, ttk
 from gui.G01b_style_base import (
     # Type aliases
     ShadeType,
+    TextColourType,
     ColourFamily,
     BorderWeightType,
     SpacingType,
     InputControlType,
     InputRoleType,
+    SizeType,
     # Utilities
     build_style_cache_key,
     resolve_text_font,
     SPACING_SCALE,
+    SPACING_SM,
+    SPACING_LG,
     BORDER_WEIGHTS,
     # Design tokens (re-exported from G01a)
     GUI_PRIMARY,
@@ -113,21 +108,16 @@ from gui.G01b_style_base import (
     GUI_SUCCESS,
     GUI_WARNING,
     GUI_ERROR,
-    GUI_TEXT,
+    TEXT_COLOURS,
 )
 
 
 # ====================================================================================================
-# 4. INPUT STYLE CACHE
+# 3. INPUT STYLE CACHE
 # ----------------------------------------------------------------------------------------------------
 # Dedicated cache for storing all resolved ttk input style names.
-#
-# Purpose:
-#   - Ensure idempotent behaviour: repeated calls with identical parameters
-#     return the same style name.
-#   - Prevent duplicate ttk.Style registrations.
-#   - Act as the single source of truth for input/field styles.
 # ====================================================================================================
+
 INPUT_STYLE_CACHE: dict[str, str] = {}
 
 # Mapping of control_type → base ttk style
@@ -146,63 +136,58 @@ INPUT_ROLE_FAMILIES: dict[str, ColourFamily] = {
     "ERROR": GUI_ERROR,
 }
 
-# Disabled state foreground colour (neutral)
-INPUT_DISABLED_FG_HEX = GUI_TEXT["GREY"]
+# Disabled state foreground colour (neutral grey)
+INPUT_DISABLED_FG_HEX = TEXT_COLOURS["GREY"]
 
 
 # ====================================================================================================
-# 5. INTERNAL HELPERS
+# 4. INTERNAL HELPERS
 # ----------------------------------------------------------------------------------------------------
 # Pure internal utilities supporting input-style resolution.
-#
-# Purpose:
-#   - Provide style-name generation via build_input_style_name().
-#   - Map control types to base ttk styles.
-#   - Resolve border widths and padding tokens into pixel values.
-#   - DO NOT create ttk styles or modify global state.
 # ====================================================================================================
+
 def build_input_style_name(
     control_type: str,
-    role_name: str,
-    shade: str,
+    bg_colour: str,
+    bg_shade: str,
+    fg_colour: str,
     border_weight: str,
+    border_colour_token: str,
     padding_token: str,
+    size_token: str,
 ) -> str:
     """
     Description:
-        Construct the canonical input-style name using the shared
-        build_style_cache_key() helper from G01b.
+        Construct the canonical input-style name using build_style_cache_key().
 
     Args:
-        control_type:
-            Input control type token ("ENTRY", "COMBOBOX", "SPINBOX").
-        role_name:
-            Semantic role token ("PRIMARY", "SECONDARY", etc.).
-        shade:
-            Shade token within the role's colour family.
-        border_weight:
-            Border weight token ("NONE", "THIN", "MEDIUM", "THICK").
-        padding_token:
-            Padding token ("NONE", "XS", "SM", "MD", "LG", "XL", "XXL").
+        control_type: Input control type token (ENTRY, COMBOBOX, SPINBOX).
+        bg_colour: Background colour token (PRIMARY, SECONDARY, etc.).
+        bg_shade: Shade token within the background colour family.
+        fg_colour: Foreground text colour token (e.g. BLACK, PRIMARY).
+        border_weight: Border weight token (NONE, THIN, MEDIUM, THICK).
+        border_colour_token: Border colour+shade token (e.g. PRIMARY_MID).
+        padding_token: Padding token (NONE, XS, SM, MD, LG, XL, XXL).
+        size_token: Font size token (DISPLAY, HEADING, TITLE, BODY, SMALL).
 
     Returns:
-        str:
-            Deterministic, human-readable style name.
+        str: Deterministic, human-readable style name.
 
     Raises:
         None.
 
     Notes:
-        - Uses build_style_cache_key from G01b for consistency.
-        - Relief is NOT encoded in the style name; it derives from border width.
+        Uses build_style_cache_key from G01b for consistency.
     """
     return build_style_cache_key(
         "Input",
         control_type.upper(),
-        f"role_{role_name.upper()}",
-        shade.upper(),
-        f"border_{border_weight.upper()}",
+        f"bg_{bg_colour.upper()}_{bg_shade.upper()}",
+        f"fg_{fg_colour.upper()}",
+        f"bw_{border_weight.upper()}",
+        f"bc_{border_colour_token}",
         f"pad_{padding_token.upper()}",
+        f"size_{size_token.upper()}",
     )
 
 
@@ -212,19 +197,16 @@ def resolve_control_base_style(control_type: str) -> str:
         Map logical control type to a ttk base style.
 
     Args:
-        control_type:
-            Input control type token ("ENTRY", "COMBOBOX", "SPINBOX").
+        control_type: Input control type token (ENTRY, COMBOBOX, SPINBOX).
 
     Returns:
-        str:
-            The ttk base style name (e.g., "TEntry").
+        str: The ttk base style name (e.g., TEntry).
 
     Raises:
-        KeyError:
-            If control_type is not recognised.
+        KeyError: If control_type is not recognised.
 
     Notes:
-        - Used to clone layout from the base style.
+        Used to clone layout from the base style.
     """
     key = control_type.upper()
     if key not in INPUT_BASE_STYLES:
@@ -241,19 +223,16 @@ def resolve_border_width_internal(border: BorderWeightType | None) -> int:
         Convert a BorderWeightType token into a numeric pixel border width.
 
     Args:
-        border:
-            Border weight token or None.
+        border: Border weight token or None.
 
     Returns:
-        int:
-            Pixel width (0 for NONE or None).
+        int: Pixel width (0 for NONE or None).
 
     Raises:
-        KeyError:
-            If border is not a valid BORDER_WEIGHTS key.
+        KeyError: If border is not a valid BORDER_WEIGHTS key.
 
     Notes:
-        - Returns 0 for None or "NONE".
+        Returns 0 for None or "NONE".
     """
     if border is None or str(border).upper() == "NONE":
         return 0
@@ -274,19 +253,16 @@ def resolve_padding_internal(padding: SpacingType | None) -> tuple[int, int]:
         Resolve a spacing token into symmetric (pad_x, pad_y) pixel values.
 
     Args:
-        padding:
-            Spacing token (XS, SM, MD, LG, XL, XXL) or None.
+        padding: Spacing token (XS, SM, MD, LG, XL, XXL) or None.
 
     Returns:
-        tuple[int, int]:
-            Symmetric padding values (pad_x, pad_y).
+        tuple[int, int]: Symmetric padding values (pad_x, pad_y).
 
     Raises:
-        KeyError:
-            If padding is not a valid SPACING_SCALE key.
+        KeyError: If padding is not a valid SPACING_SCALE key.
 
     Notes:
-        - Returns (0, 0) for None.
+        Returns (0, 0) for None.
     """
     if padding is None:
         return (0, 0)
@@ -303,109 +279,133 @@ def resolve_padding_internal(padding: SpacingType | None) -> tuple[int, int]:
 
 
 # ====================================================================================================
-# 6. INPUT STYLE RESOLUTION (PUBLIC API – CORE ENGINE)
+# 5. INPUT STYLE RESOLUTION (PUBLIC API – CORE ENGINE)
 # ----------------------------------------------------------------------------------------------------
 # The main input-style resolver: resolve_input_style().
-#
-# Purpose:
-#   - Convert high-level semantic parameters (role, shade, border, padding)
-#     into concrete ttk input styles.
-#   - Apply deterministic naming and idempotent caching.
-#   - Register styles with ttk.Style(), including padding, border, and font.
-#
-# Notes:
-#   - This is the ONLY place that creates ttk styles for input/field widgets.
-#   - Text colour is derived from GUI_TEXT for readability.
 # ====================================================================================================
+
 def resolve_input_style(
     control_type: InputControlType = "ENTRY",
-    role: InputRoleType = "SECONDARY",
-    shade: ShadeType = "LIGHT",
-    border: BorderWeightType | None = "THIN",
+    bg_colour: str = "SECONDARY",
+    bg_shade: ShadeType = "LIGHT",
+    fg_colour: TextColourType = "BLACK",
+    border_weight: BorderWeightType | None = "THIN",
+    border_colour: str | None = None,
+    border_shade: ShadeType | None = None,
     padding: SpacingType | None = "SM",
+    size: SizeType = "BODY",
 ) -> str:
     """
     Description:
         Resolve a complete ttk input style (Entry, Combobox, Spinbox) with
-        foreground, background, border, padding, and font. Styles are created
-        lazily and cached by a deterministic key.
+        foreground, background, border, padding, and font.
 
     Args:
-        control_type:
-            The input widget type. One of: "ENTRY", "COMBOBOX", "SPINBOX".
-            Defaults to "ENTRY".
-        role:
-            Semantic colour role for the field surface and border.
-            One of: "PRIMARY", "SECONDARY", "SUCCESS", "WARNING", "ERROR".
-            Defaults to "SECONDARY".
-        shade:
-            Shade within the role's colour family. One of:
-            "LIGHT", "MID", "DARK", "XDARK". Defaults to "LIGHT".
-        border:
-            Border weight token. One of: "NONE", "THIN", "MEDIUM", "THICK",
-            or None. Defaults to "THIN".
-        padding:
-            Internal padding token. One of: "XS", "SM", "MD", "LG", "XL",
-            "XXL", or None. Defaults to "SM".
+        control_type: Input widget type (ENTRY, COMBOBOX, SPINBOX).
+        bg_colour: Background colour preset (PRIMARY, SECONDARY, SUCCESS, etc.).
+        bg_shade: Shade within the background colour family (LIGHT, MID, etc.).
+        fg_colour: Foreground text colour (BLACK, WHITE, GREY, PRIMARY, etc.).
+        border_weight: Border weight token (NONE, THIN, MEDIUM, THICK) or None.
+        border_colour: Border colour preset. If None, uses neutral border.
+        border_shade: Shade within the border colour family. Defaults to MID.
+        padding: Internal padding token (XS, SM, MD, LG, XL, XXL) or None.
+        size: Font size token (DISPLAY, HEADING, TITLE, BODY, SMALL).
 
     Returns:
-        str:
-            The registered ttk style name. Use directly on input widgets:
-                ttk.Entry(parent, style=style_name)
+        str: The registered ttk style name for use with input widgets.
 
     Raises:
-        KeyError:
-            If role is invalid or shade is not valid for the role's family,
-            or if border/padding tokens are invalid.
+        KeyError: If colour/shade tokens are invalid.
 
     Notes:
-        - SECONDARY/LIGHT + THIN border is the default for neutral inputs.
-        - SUCCESS / WARNING / ERROR roles can be used for status feedback.
-        - Border width 0 effectively hides borders regardless of relief.
+        SECONDARY/LIGHT + THIN border is the default for neutral inputs.
     """
     if logger.isEnabledFor(logging.DEBUG):
         logger.debug("———[G01e DEBUG START]———————————————————————————")
         logger.debug(
-            "INPUT → control_type=%s, role=%s, shade=%s, border=%s, padding=%s",
-            control_type, role, shade, border, padding
+            "INPUT → control_type=%s, bg_colour=%s, bg_shade=%s, fg_colour=%s, border_weight=%s, padding=%s, size=%s",
+            control_type, bg_colour, bg_shade, fg_colour, border_weight, padding, size
         )
 
-    role_key = role.upper()
-    if role_key not in INPUT_ROLE_FAMILIES:
+    # ------------------------------------------------------------------------------------------------
+    # Step 1: Resolve foreground colour
+    # ------------------------------------------------------------------------------------------------
+    fg_colour_upper = fg_colour.upper()
+
+    if fg_colour_upper not in TEXT_COLOURS:
         raise KeyError(
-            f"[G01e] Invalid role '{role_key}'. "
+            f"[G01e] Invalid fg_colour '{fg_colour}'. "
+            f"Valid options: {list(TEXT_COLOURS.keys())}"
+        )
+
+    fg_hex = TEXT_COLOURS[fg_colour_upper]
+
+    # ------------------------------------------------------------------------------------------------
+    # Step 2: Resolve background colour
+    # ------------------------------------------------------------------------------------------------
+    bg_key = bg_colour.upper()
+    if bg_key not in INPUT_ROLE_FAMILIES:
+        raise KeyError(
+            f"[G01e] Invalid bg_colour '{bg_key}'. "
             f"Expected: {list(INPUT_ROLE_FAMILIES.keys())}"
         )
 
-    colour_family = INPUT_ROLE_FAMILIES[role_key]
+    bg_family = INPUT_ROLE_FAMILIES[bg_key]
+    bg_shade_normalised: str = bg_shade.upper()
 
-    # Normalise shade token to uppercase before validation
-    shade_normalised: str = shade.upper()
-
-    if shade_normalised not in colour_family:
+    if bg_shade_normalised not in bg_family:
         raise KeyError(
-            f"[G01e] Invalid shade '{shade_normalised}' for role '{role_key}'. "
-            f"Available: {list(colour_family.keys())}"
+            f"[G01e] Invalid bg_shade '{bg_shade_normalised}' for bg_colour '{bg_key}'. "
+            f"Available: {list(bg_family.keys())}"
         )
 
-    # Resolve colours
-    bg_hex = colour_family[shade_normalised]
-    fg_hex = GUI_TEXT["BLACK"]
+    bg_hex = bg_family[bg_shade_normalised]
 
-    # Border width + padding
-    border_width = resolve_border_width_internal(border)
+    # ------------------------------------------------------------------------------------------------
+    # Step 3: Resolve border colour
+    # ------------------------------------------------------------------------------------------------
+    if border_colour is not None:
+        border_colour_key = border_colour.upper()
+        if border_colour_key not in INPUT_ROLE_FAMILIES:
+            raise KeyError(
+                f"[G01e] Invalid border_colour '{border_colour_key}'. "
+                f"Expected: {list(INPUT_ROLE_FAMILIES.keys())}"
+            )
+        border_family = INPUT_ROLE_FAMILIES[border_colour_key]
+        border_shade_normalised = (border_shade or "MID").upper()
+        if border_shade_normalised not in border_family:
+            raise KeyError(
+                f"[G01e] Invalid border_shade '{border_shade_normalised}'. "
+                f"Available: {list(border_family.keys())}"
+            )
+        border_colour_hex = border_family[border_shade_normalised]
+        border_colour_token = f"{border_colour_key}_{border_shade_normalised}"
+    else:
+        border_colour_hex = None
+        border_colour_token = "DEFAULT"
+
+    # ------------------------------------------------------------------------------------------------
+    # Step 4: Border width + padding
+    # ------------------------------------------------------------------------------------------------
+    border_width_px = resolve_border_width_internal(border_weight)
     pad_x, pad_y = resolve_padding_internal(padding)
 
-    border_token = "NONE" if border_width == 0 else str(border).upper()
+    border_weight_token = "NONE" if border_width_px == 0 else str(border_weight).upper()
     padding_token = "NONE" if padding is None else str(padding).upper()
+    size_token = str(size).upper() if size else "BODY"
 
-    # Build deterministic style name
+    # ------------------------------------------------------------------------------------------------
+    # Step 5: Build deterministic style name
+    # ------------------------------------------------------------------------------------------------
     style_name = build_input_style_name(
         control_type=control_type,
-        role_name=role_key,
-        shade=shade_normalised,
-        border_weight=border_token,
+        bg_colour=bg_key,
+        bg_shade=bg_shade_normalised,
+        fg_colour=fg_colour_upper,
+        border_weight=border_weight_token,
+        border_colour_token=border_colour_token,
         padding_token=padding_token,
+        size_token=size_token,
     )
 
     if logger.isEnabledFor(logging.DEBUG):
@@ -418,10 +418,11 @@ def resolve_input_style(
             logger.debug("———[G01e DEBUG END]—————————————————————————————")
         return INPUT_STYLE_CACHE[style_name]
 
-    # Base ttk style
+    # ------------------------------------------------------------------------------------------------
+    # Step 6: Create ttk style
+    # ------------------------------------------------------------------------------------------------
     base_style = resolve_control_base_style(control_type)
 
-    # Create ttk.Style and derive layout
     style = ttk.Style()
     try:
         style.layout(style_name, style.layout(base_style))
@@ -429,16 +430,16 @@ def resolve_input_style(
         if logger.isEnabledFor(logging.DEBUG):
             logger.debug("[G01e] WARNING — could not apply layout: %s", exc)
 
-    # Font – use BODY neutral font
+    # Font – use specified size
     font_key = resolve_text_font(
-        size="BODY",
+        size=size_token,
         bold=False,
         underline=False,
         italic=False,
     )
 
     # Relief derived from border width
-    relief = "solid" if border_width > 0 else "flat"
+    relief = "solid" if border_width_px > 0 else "flat"
 
     # Apply configuration
     style.configure(
@@ -446,17 +447,21 @@ def resolve_input_style(
         foreground=fg_hex,
         fieldbackground=bg_hex,
         background=bg_hex,
-        borderwidth=border_width,
+        borderwidth=border_width_px,
         relief=relief,
         padding=(pad_x, pad_y),
         font=font_key,
     )
 
+    # Apply border colour if specified
+    if border_colour_hex:
+        style.configure(style_name, bordercolor=border_colour_hex)
+
     # Focus / disabled state behaviour
-    focus_hex = colour_family.get("MID", bg_hex)
+    focus_hex = bg_family.get("MID", bg_hex)
     style.map(
         style_name,
-        bordercolor=[("focus", focus_hex)],
+        bordercolor=[("focus", border_colour_hex or focus_hex)],
         foreground=[("disabled", INPUT_DISABLED_FG_HEX), ("!disabled", fg_hex)],
     )
 
@@ -465,187 +470,81 @@ def resolve_input_style(
 
     if logger.isEnabledFor(logging.DEBUG):
         logger.debug("[G01e] Created input style: %s", style_name)
-        logger.debug("  Background: %s, Border width: %s, Relief: %s", bg_hex, border_width, relief)
+        logger.debug("  Background: %s, Border width: %s, Relief: %s", bg_hex, border_width_px, relief)
         logger.debug("———[G01e DEBUG END]—————————————————————————————")
 
     return style_name
 
 
 # ====================================================================================================
-# 7. CONVENIENCE HELPERS
+# 6. CONVENIENCE HELPERS
 # ----------------------------------------------------------------------------------------------------
-# Simple semantic presets wrapping resolve_input_style().
-#
-# Purpose:
-#   - Reduce boilerplate in higher-level GUI components.
-#   - Keep construction clean.
+# Simple forwarders to resolve_input_style() with semantic presets.
 # ====================================================================================================
+
 def input_style_entry_default() -> str:
-    """
-    Description:
-        Default entry style with neutral colours.
-
-    Args:
-        None.
-
-    Returns:
-        str:
-            Registered ttk style name.
-
-    Raises:
-        None.
-
-    Notes:
-        - Uses role=SECONDARY, shade=LIGHT, border=THIN, padding=SM.
-        - Relief is automatically derived from border width
-          (“solid” when border > 0, otherwise “flat”).
-    """
+    """Return default entry style (SECONDARY/LIGHT, THIN border). Forwards to resolve_input_style()."""
     return resolve_input_style(
         control_type="ENTRY",
-        role="SECONDARY",
-        shade="LIGHT",
-        border="THIN",
+        bg_colour="SECONDARY",
+        bg_shade="LIGHT",
+        border_weight="THIN",
         padding="SM",
     )
 
 
 def input_style_entry_error() -> str:
-    """
-    Description:
-        Entry style with error-indicating surface and border.
-
-    Args:
-        None.
-
-    Returns:
-        str:
-            Registered ttk style name.
-
-    Raises:
-        None.
-
-    Notes:
-        - Uses role=ERROR, shade=LIGHT, border=MEDIUM.
-    """
+    """Return error entry style (ERROR/LIGHT, MEDIUM border). Forwards to resolve_input_style()."""
     return resolve_input_style(
         control_type="ENTRY",
-        role="ERROR",
-        shade="LIGHT",
-        border="MEDIUM",
+        bg_colour="ERROR",
+        bg_shade="LIGHT",
+        border_weight="MEDIUM",
         padding="SM",
     )
 
 
 def input_style_entry_success() -> str:
-    """
-    Description:
-        Entry style with success-indicating surface and border.
-
-    Args:
-        None.
-
-    Returns:
-        str:
-            Registered ttk style name.
-
-    Raises:
-        None.
-
-    Notes:
-        - Uses role=SUCCESS, shade=LIGHT, border=THIN.
-    """
+    """Return success entry style (SUCCESS/LIGHT, THIN border). Forwards to resolve_input_style()."""
     return resolve_input_style(
         control_type="ENTRY",
-        role="SUCCESS",
-        shade="LIGHT",
-        border="THIN",
+        bg_colour="SUCCESS",
+        bg_shade="LIGHT",
+        border_weight="THIN",
         padding="SM",
     )
 
 
 def input_style_combobox_default() -> str:
-    """
-    Description:
-        Default combobox style with neutral colours.
-
-    Args:
-        None.
-
-    Returns:
-        str:
-            Registered ttk style name.
-
-    Raises:
-        None.
-
-    Notes:
-        - Uses same defaults as entry: SECONDARY/LIGHT with THIN border.
-    """
+    """Return default combobox style (SECONDARY/LIGHT, THIN border). Forwards to resolve_input_style()."""
     return resolve_input_style(
         control_type="COMBOBOX",
-        role="SECONDARY",
-        shade="LIGHT",
-        border="THIN",
+        bg_colour="SECONDARY",
+        bg_shade="LIGHT",
+        border_weight="THIN",
         padding="SM",
     )
 
 
 def input_style_spinbox_default() -> str:
-    """
-    Description:
-        Default spinbox style with neutral colours.
-
-    Args:
-        None.
-
-    Returns:
-        str:
-            Registered ttk style name.
-
-    Raises:
-        None.
-
-    Notes:
-        - Uses same defaults as entry: SECONDARY/LIGHT with THIN border.
-    """
+    """Return default spinbox style (SECONDARY/LIGHT, THIN border). Forwards to resolve_input_style()."""
     return resolve_input_style(
         control_type="SPINBOX",
-        role="SECONDARY",
-        shade="LIGHT",
-        border="THIN",
+        bg_colour="SECONDARY",
+        bg_shade="LIGHT",
+        border_weight="THIN",
         padding="SM",
     )
 
 
 # ====================================================================================================
-# 8. CACHE INTROSPECTION
+# 7. CACHE INTROSPECTION
 # ----------------------------------------------------------------------------------------------------
 # Diagnostic functions for inspecting and managing the input style cache.
-#
-# Purpose:
-#   - Enable runtime cache inspection for debugging.
-#   - Support cache clearing for theme switching or testing.
 # ====================================================================================================
+
 def get_input_style_cache_info() -> dict[str, int | list[str]]:
-    """
-    Description:
-        Return diagnostic information about the input style cache.
-
-    Args:
-        None.
-
-    Returns:
-        dict[str, int | list[str]]:
-            Dictionary containing:
-            - "count": Number of cached styles
-            - "keys": List of all cached style names
-
-    Raises:
-        None.
-
-    Notes:
-        - Useful for debugging and verifying cache behaviour.
-    """
+    """Return diagnostic info about the input style cache (count and keys)."""
     return {
         "count": len(INPUT_STYLE_CACHE),
         "keys": list(INPUT_STYLE_CACHE.keys()),
@@ -653,32 +552,15 @@ def get_input_style_cache_info() -> dict[str, int | list[str]]:
 
 
 def clear_input_style_cache() -> None:
-    """
-    Description:
-        Clear all entries from the input style cache.
-
-    Args:
-        None.
-
-    Returns:
-        None.
-
-    Raises:
-        None.
-
-    Notes:
-        - Use for theme switching or testing.
-        - Does NOT unregister styles from ttk.Style().
-    """
+    """Clear all entries from the input style cache. Does NOT unregister styles from ttk."""
     INPUT_STYLE_CACHE.clear()
     logger.info("[G01e] Cleared input style cache")
 
 
 # ====================================================================================================
-# 9. PUBLIC API
+# 8. PUBLIC API
 # ----------------------------------------------------------------------------------------------------
-# Expose resolver + convenience helpers.
-# ====================================================================================================
+
 __all__ = [
     # Main engine
     "resolve_input_style",
@@ -695,8 +577,9 @@ __all__ = [
 
 
 # ====================================================================================================
-# 10. SELF-TEST
+# 9. SELF-TEST
 # ----------------------------------------------------------------------------------------------------
+
 if __name__ == "__main__":
     init_logging()
     logger.info("[G01e] Running G01e_input_styles self-test...")
@@ -705,37 +588,104 @@ if __name__ == "__main__":
     root.title("G01e Input Styles — Self-test")
 
     try:
-        root.geometry("450x320")
-        frame = ttk.Frame(root, padding=20)
+        root.geometry("450x500")
+        frame = ttk.Frame(root, padding=SPACING_LG)
         frame.pack(fill="both", expand=True)
 
+        # Test all convenience helpers
         s_default = input_style_entry_default()
-        s_error = input_style_entry_error()
-        s_success = input_style_entry_success()
-        s_combo = input_style_combobox_default()
+        logger.info("Default entry style: %s", s_default)
+        assert s_default, "Default entry style should not be empty"
+        assert "ENTRY" in s_default, "Default entry style should contain ENTRY"
 
-        ttk.Label(frame, text="Default Entry:").pack(anchor="w")
+        s_error = input_style_entry_error()
+        logger.info("Error entry style: %s", s_error)
+        assert s_error, "Error entry style should not be empty"
+        assert "ERROR" in s_error, "Error entry style should contain ERROR"
+
+        s_success = input_style_entry_success()
+        logger.info("Success entry style: %s", s_success)
+        assert s_success, "Success entry style should not be empty"
+        assert "SUCCESS" in s_success, "Success entry style should contain SUCCESS"
+
+        s_combo = input_style_combobox_default()
+        logger.info("Default combobox style: %s", s_combo)
+        assert s_combo, "Default combobox style should not be empty"
+        assert "COMBOBOX" in s_combo, "Combobox style should contain COMBOBOX"
+
+        s_spinbox = input_style_spinbox_default()
+        logger.info("Default spinbox style: %s", s_spinbox)
+        assert s_spinbox, "Default spinbox style should not be empty"
+        assert "SPINBOX" in s_spinbox, "Spinbox style should contain SPINBOX"
+
+        # Test resolve_input_style with different sizes
+        s_heading = resolve_input_style(size="HEADING")
+        logger.info("Heading size entry style: %s", s_heading)
+        assert "HEADING" in s_heading, "Heading style should contain HEADING"
+
+        s_small = resolve_input_style(size="SMALL")
+        logger.info("Small size entry style: %s", s_small)
+        assert "SMALL" in s_small, "Small style should contain SMALL"
+
+        # Test fg_colour options
+        s_primary_text = resolve_input_style(fg_colour="PRIMARY")
+        logger.info("Primary fg_colour style: %s", s_primary_text)
+        assert "fg_PRIMARY" in s_primary_text, "Style should contain fg_PRIMARY"
+
+        s_error_text = resolve_input_style(fg_colour="ERROR")
+        logger.info("Error fg_colour style: %s", s_error_text)
+        assert "fg_ERROR" in s_error_text, "Style should contain fg_ERROR"
+
+        # Visual smoke test
+        ttk.Label(frame, text="Default Entry (BODY):").pack(anchor="w")
         e1 = ttk.Entry(frame, style=s_default)
         e1.insert(0, "Default Entry")
-        e1.pack(fill="x", pady=(0, 10))
+        e1.pack(fill="x", pady=(0, SPACING_SM))
 
-        ttk.Label(frame, text="Error Entry:").pack(anchor="w")
+        ttk.Label(frame, text="Heading Entry:").pack(anchor="w")
+        e_heading = ttk.Entry(frame, style=s_heading)
+        e_heading.insert(0, "Heading Size Entry")
+        e_heading.pack(fill="x", pady=(0, SPACING_SM))
+
+        ttk.Label(frame, text="Small Entry:").pack(anchor="w")
+        e_small = ttk.Entry(frame, style=s_small)
+        e_small.insert(0, "Small Size Entry")
+        e_small.pack(fill="x", pady=(0, SPACING_SM))
+
+        ttk.Label(frame, text="Error bg Entry:").pack(anchor="w")
         e2 = ttk.Entry(frame, style=s_error)
         e2.insert(0, "Error Entry")
-        e2.pack(fill="x", pady=(0, 10))
+        e2.pack(fill="x", pady=(0, SPACING_SM))
 
-        ttk.Label(frame, text="Success Entry:").pack(anchor="w")
+        ttk.Label(frame, text="Success bg Entry:").pack(anchor="w")
         e3 = ttk.Entry(frame, style=s_success)
         e3.insert(0, "Success Entry")
-        e3.pack(fill="x", pady=(0, 10))
+        e3.pack(fill="x", pady=(0, SPACING_SM))
 
         ttk.Label(frame, text="Combobox:").pack(anchor="w")
         c1 = ttk.Combobox(frame, style=s_combo, values=["Option A", "Option B", "Option C"])
         c1.set("Select...")
-        c1.pack(fill="x", pady=(0, 10))
+        c1.pack(fill="x", pady=(0, SPACING_SM))
 
-        logger.info("Cache info: %s", get_input_style_cache_info())
+        ttk.Label(frame, text="Spinbox:").pack(anchor="w")
+        sp1 = ttk.Spinbox(frame, style=s_spinbox, from_=0, to=100)
+        sp1.pack(fill="x", pady=(0, SPACING_SM))
 
+        # Cache info
+        cache_info = get_input_style_cache_info()
+        logger.info("Cache info: %s", cache_info)
+        cache_count = cache_info["count"]
+        assert isinstance(cache_count, int) and cache_count >= 9, (
+            f"Expected at least 9 cached styles, got {cache_count}"
+        )
+
+        # Test clear_input_style_cache
+        clear_input_style_cache()
+        cache_info_after = get_input_style_cache_info()
+        assert cache_info_after["count"] == 0, "Cache should be empty after clear"
+        logger.info("clear_input_style_cache() works correctly")
+
+        logger.info("[G01e] All assertions passed. Visual widgets created; entering mainloop...")
         root.mainloop()
 
     except Exception as exc:

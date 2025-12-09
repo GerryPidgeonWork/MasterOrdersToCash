@@ -1,5 +1,5 @@
 # ====================================================================================================
-# G04d_app_shell.py
+# G04d_app_shell.py                                                                      [v1.0.0]
 # ----------------------------------------------------------------------------------------------------
 # Application shell — top-level orchestrator for the GUI framework.
 #
@@ -9,23 +9,10 @@
 #   - Provide the main entry point for applications.
 #   - Implement WindowProtocol for G03f Renderer.
 #
-# Relationships:
-#   - G02c_window_shell → Uses for window configuration (geometry, title, theme).
-#   - G03f_renderer     → Provides window reference, receives page frames.
-#   - G04a_app_state    → Creates and owns the AppState instance.
-#   - G04b_navigator    → Creates and owns the Navigator instance.
-#   - G04c_app_menu     → Creates and owns the AppMenu instance.
-#
-# Design principles:
-#   - AppShell is the single entry point for GUI applications.
-#   - All G04 components are created and wired here.
-#   - Subclass AppShell to customise application behaviour.
-#   - Pages are registered via register_page() before run().
-#
 # ----------------------------------------------------------------------------------------------------
 # Author:       Gerry Pidgeon
-# Created:      2025-12-07
-# Project:      GUI Framework v1.0 - G04 Application Infrastructure
+# Created:      2025-12-12
+# Project:      SimpleTk v1.0
 # ====================================================================================================
 
 
@@ -76,16 +63,9 @@ from core.C03_logging_handler import get_logger, log_exception, init_logging
 logger = get_logger(__name__)
 
 # --- Additional project-level imports (append below this line only) ----------------------------------
-# GUI packages
 from gui.G00a_gui_packages import tk, ttk
-
-# G02 - Window shell for configuration
 from gui.G02c_gui_base import BaseWindow
-
-# G03 - Renderer for page instantiation
 from gui.G03f_renderer import G03Renderer, PageProtocol
-
-# G04 - Application infrastructure
 from gui.G04a_app_state import AppState
 from gui.G04b_navigator import Navigator
 from gui.G04c_app_menu import AppMenu
@@ -93,8 +73,6 @@ from gui.G04c_app_menu import AppMenu
 
 # ====================================================================================================
 # 3. CONFIGURATION
-# ----------------------------------------------------------------------------------------------------
-# Default application settings. Override via AppShell constructor.
 # ====================================================================================================
 
 DEFAULT_TITLE = "GUI Framework Application"
@@ -106,48 +84,14 @@ DEFAULT_MIN_HEIGHT = 600
 
 # ====================================================================================================
 # 4. APP SHELL CLASS
-# ----------------------------------------------------------------------------------------------------
+# ====================================================================================================
 
 class AppShell:
     """
-    Description:
-        Top-level application orchestrator that creates and wires together
-        all framework components. Provides the main entry point for applications.
+    Top-level application orchestrator that creates and wires together all
+    framework components. Implements WindowProtocol for G03f Renderer.
 
-    Args:
-        title:
-            Window title.
-        width:
-            Initial window width.
-        height:
-            Initial window height.
-        min_width:
-            Minimum window width.
-        min_height:
-            Minimum window height.
-        app_name:
-            Application name for About dialog.
-        app_version:
-            Application version for About dialog.
-        app_author:
-            Application author for About dialog.
-        enable_cache:
-            Whether to enable page caching in Navigator.
-        start_page:
-            Name of the page to show on startup (must be registered).
-        bg_colour:
-            Background colour hex string for the window.
-
-    Returns:
-        None.
-
-    Raises:
-        None.
-
-    Notes:
-        - Call register_page() to add pages before run().
-        - Call run() to start the application mainloop.
-        - Implements WindowProtocol for G03f Renderer.
+    Call register_page() to add pages before run(). Call run() to start mainloop.
     """
 
     def __init__(
@@ -170,30 +114,18 @@ class AppShell:
             Initialise the application shell and all framework components.
 
         Args:
-            title:
-                Window title.
-            width:
-                Initial window width.
-            height:
-                Initial window height.
-            min_width:
-                Minimum window width.
-            min_height:
-                Minimum window height.
-            app_name:
-                Application name for About dialog (defaults to title).
-            app_version:
-                Application version for About dialog.
-            app_author:
-                Application author for About dialog.
-            enable_cache:
-                Whether to enable page caching.
-            start_page:
-                Name of the page to show on startup.
-            start_maximized:
-                Whether to start the window maximized.
-            bg_colour:
-                Background colour hex string for the window.
+            title: Window title.
+            width: Initial window width.
+            height: Initial window height.
+            min_width: Minimum window width.
+            min_height: Minimum window height.
+            app_name: Application name for About dialog (defaults to title).
+            app_version: Application version for About dialog.
+            app_author: Application author for About dialog.
+            enable_cache: Whether to enable page caching.
+            start_page: Name of the page to show on startup.
+            start_maximized: Whether to start the window maximized.
+            bg_colour: Background colour hex string for the window.
 
         Returns:
             None.
@@ -202,14 +134,13 @@ class AppShell:
             None.
 
         Notes:
-            - Components are created but mainloop is not started.
+            Components are created but mainloop is not started.
         """
         self._title = title
         self._start_page = start_page
         self._app_name = app_name or title
         self._start_maximized = start_maximized
 
-        # Create window (owns root Tk window)
         self._window = BaseWindow(
             title=title,
             width=width,
@@ -219,18 +150,14 @@ class AppShell:
             bg_colour=bg_colour,
         )
 
-        # Get root and content frame references
         self._root = self._window.root
         self._content_frame = self._window.content_frame
 
-        # Create AppState
         self._app_state = AppState()
 
-        # Create Renderer and inject window reference
         self._renderer = G03Renderer()
         self._renderer.set_window(self)
 
-        # Create Navigator
         self._navigator = Navigator(
             renderer=self._renderer,
             app_state=self._app_state,
@@ -238,7 +165,6 @@ class AppShell:
         )
         self._navigator.set_controller(self)
 
-        # Create AppMenu
         self._menu = AppMenu(
             root=self._root,
             navigator=self._navigator,
@@ -253,28 +179,10 @@ class AppShell:
     # ------------------------------------------------------------------------------------------------
     # WINDOW PROTOCOL IMPLEMENTATION
     # ------------------------------------------------------------------------------------------------
-    # These methods satisfy the WindowProtocol expected by G03f Renderer.
-    # ------------------------------------------------------------------------------------------------
 
     @property
     def content_frame(self) -> ttk.Frame:
-        """
-        Description:
-            Get the content frame where pages are mounted.
-
-        Args:
-            None.
-
-        Returns:
-            ttk.Frame:
-                The content frame from WindowShell.
-
-        Raises:
-            None.
-
-        Notes:
-            - Part of WindowProtocol for G03f Renderer.
-        """
+        """Get the content frame where pages are mounted (WindowProtocol)."""
         return self._content_frame
 
     def set_content(self, frame: tk.Misc) -> None:
@@ -283,8 +191,7 @@ class AppShell:
             Mount a page frame into the content area.
 
         Args:
-            frame:
-                The page frame to display.
+            frame: The page frame to display.
 
         Returns:
             None.
@@ -293,18 +200,14 @@ class AppShell:
             None.
 
         Notes:
-            - Part of WindowProtocol for G03f Renderer.
-            - Hides existing content and packs new frame.
+            Part of WindowProtocol. Hides existing content and packs new frame.
         """
-        # Hide existing content (don't destroy - may be cached)
         for child in self._content_frame.winfo_children():
-            # Cast to Widget to access geometry management methods
             widget = cast(tk.Widget, child)
             widget.pack_forget()
             widget.grid_forget()
             widget.place_forget()
 
-        # Pack new frame to fill content area
         cast(tk.Widget, frame).pack(in_=self._content_frame, fill=tk.BOTH, expand=True)
 
         logger.debug("[G04d] Content frame updated.")
@@ -319,20 +222,17 @@ class AppShell:
             Register a page class with the Navigator.
 
         Args:
-            name:
-                Unique identifier for the page.
-            page_class:
-                The page class implementing PageProtocol.
+            name: Unique identifier for the page.
+            page_class: The page class implementing PageProtocol.
 
         Returns:
             None.
 
         Raises:
-            ValueError:
-                If the name is already registered.
+            ValueError: If the name is already registered.
 
         Notes:
-            - Convenience method that delegates to Navigator.
+            Convenience method that delegates to Navigator.
         """
         self._navigator.register_page(name, page_class)
 
@@ -355,17 +255,14 @@ class AppShell:
             None.
 
         Notes:
-            - Navigates to start_page if registered.
-            - Blocks until window is closed.
+            Navigates to start_page if registered. Blocks until window closed.
         """
         logger.info("[G04d] Starting application: '%s'", self._title)
 
-        # Maximize window if requested
         if self._start_maximized:
-            self._root.state("zoomed")  # Windows
+            self._root.state("zoomed")
             logger.debug("[G04d] Window maximized.")
 
-        # Navigate to start page if registered
         if self._navigator.is_registered(self._start_page):
             self._navigator.navigate(self._start_page)
         else:
@@ -374,28 +271,12 @@ class AppShell:
                 self._start_page,
             )
 
-        # Start mainloop
         self._root.mainloop()
 
         logger.info("[G04d] Application closed: '%s'", self._title)
 
     def quit(self) -> None:
-        """
-        Description:
-            Quit the application.
-
-        Args:
-            None.
-
-        Returns:
-            None.
-
-        Raises:
-            None.
-
-        Notes:
-            - Stops the mainloop and closes the window.
-        """
+        """Quit the application — stops mainloop and closes window."""
         logger.info("[G04d] Quit requested.")
         self._root.quit()
 
@@ -405,113 +286,33 @@ class AppShell:
 
     @property
     def root(self) -> tk.Tk:
-        """
-        Description:
-            Get the root Tk window.
-
-        Args:
-            None.
-
-        Returns:
-            tk.Tk:
-                The root window.
-
-        Raises:
-            None.
-
-        Notes:
-            - Use sparingly; prefer framework methods.
-        """
+        """Get the root Tk window."""
         return self._root
 
     @property
     def window(self) -> BaseWindow:
-        """
-        Description:
-            Get the BaseWindow instance.
-
-        Args:
-            None.
-
-        Returns:
-            BaseWindow:
-                The window instance.
-
-        Raises:
-            None.
-
-        Notes:
-            - Provides access to window configuration methods.
-        """
+        """Get the BaseWindow instance for window configuration."""
         return self._window
 
     @property
     def app_state(self) -> AppState:
-        """
-        Description:
-            Get the AppState instance.
-
-        Args:
-            None.
-
-        Returns:
-            AppState:
-                The application state manager.
-
-        Raises:
-            None.
-
-        Notes:
-            - Use for reading/writing application state.
-        """
+        """Get the AppState instance for reading/writing application state."""
         return self._app_state
 
     @property
     def navigator(self) -> Navigator:
-        """
-        Description:
-            Get the Navigator instance.
-
-        Args:
-            None.
-
-        Returns:
-            Navigator:
-                The page navigator.
-
-        Raises:
-            None.
-
-        Notes:
-            - Use for programmatic navigation.
-        """
+        """Get the Navigator instance for programmatic navigation."""
         return self._navigator
 
     @property
     def menu(self) -> AppMenu:
-        """
-        Description:
-            Get the AppMenu instance.
-
-        Args:
-            None.
-
-        Returns:
-            AppMenu:
-                The application menu.
-
-        Raises:
-            None.
-
-        Notes:
-            - Use for adding custom menu items.
-        """
+        """Get the AppMenu instance for adding custom menu items."""
         return self._menu
 
 
 # ====================================================================================================
 # 5. PUBLIC API
-# ----------------------------------------------------------------------------------------------------
+# ====================================================================================================
 
 __all__ = [
     "AppShell",
@@ -525,8 +326,6 @@ __all__ = [
 
 # ====================================================================================================
 # 6. SELF-TEST
-# ----------------------------------------------------------------------------------------------------
-# Note: This test opens a GUI window briefly.
 # ====================================================================================================
 
 if __name__ == "__main__":
@@ -534,8 +333,6 @@ if __name__ == "__main__":
     logger.info("=" * 60)
     logger.info("[G04d] AppShell — Self Test")
     logger.info("=" * 60)
-
-    # ----- Mock page for testing -----
 
     class HomePage:
         """Test home page."""
@@ -553,7 +350,6 @@ if __name__ == "__main__":
             )
             label.pack(expand=True, pady=20)
 
-            # Navigation button
             btn = ttk.Button(
                 frame,
                 text="Go to Settings",
@@ -579,7 +375,6 @@ if __name__ == "__main__":
             )
             label.pack(expand=True, pady=20)
 
-            # Back button
             btn = ttk.Button(
                 frame,
                 text="Back to Home",
@@ -588,8 +383,6 @@ if __name__ == "__main__":
             btn.pack(pady=10)
 
             return frame
-
-    # ----- Run test -----
 
     try:
         logger.info("[Test 1] Creating AppShell...")
@@ -607,15 +400,15 @@ if __name__ == "__main__":
         logger.info("[Test 1] PASSED - AppShell created")
 
         logger.info("[Test 2] Registering pages...")
-        app.register_page("home", HomePage) # type: ignore[arg-type]
-        app.register_page("settings", SettingsPage) # type: ignore[arg-type]
+        app.register_page("home", HomePage)  # type: ignore[arg-type]
+        app.register_page("settings", SettingsPage)  # type: ignore[arg-type]
         logger.info("[Test 2] PASSED - Pages registered")
 
         logger.info("[Test 3] Verifying component wiring...")
-        assert app.app_state is not None, "app_state should exist"
-        assert app.navigator is not None, "navigator should exist"
-        assert app.menu is not None, "menu should exist"
-        assert app.root is not None, "root should exist"
+        assert app.app_state is not None
+        assert app.navigator is not None
+        assert app.menu is not None
+        assert app.root is not None
         logger.info("[Test 3] PASSED - Components wired")
 
         logger.info("[G04d] Self-test window opening...")
@@ -628,13 +421,12 @@ if __name__ == "__main__":
         logger.info("  - Close window or use File > Exit")
         logger.info("=" * 60)
 
-        # Auto-close after 5 seconds for automated testing
         app.root.after(5000, app.quit)
 
         app.run()
 
         logger.info("=" * 60)
-        logger.info("[G04d] All tests PASSED")
+        logger.info("[G04d] All tests PASSED (3 tests, 4 assertions)")
         logger.info("=" * 60)
 
     except Exception as exc:

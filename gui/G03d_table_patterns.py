@@ -1,5 +1,5 @@
 # ====================================================================================================
-# G03d_table_patterns.py
+# G03d_table_patterns.py                                                                 [v1.0.0]
 # ----------------------------------------------------------------------------------------------------
 # Table and list patterns for the GUI framework.
 #
@@ -8,21 +8,10 @@
 #   - Include helpers for simple tables, zebra-striped rows, toolbar+table containers.
 #   - Enable consistent table styling and layout across the application.
 #
-# Relationships:
-#   - G01a_style_config     → spacing tokens.
-#   - G02a_widget_primitives → widget factories.
-#   - G03a_layout_patterns  → toolbar_content_layout.
-#   - G03d_table_patterns   → table patterns (THIS MODULE).
-#
-# Design principles:
-#   - Wrap ttk.Treeview construction in reusable helpers.
-#   - Accept column definitions, headings, and options as parameters.
-#   - No data loading/persistence logic — only UI structure.
-#
 # ----------------------------------------------------------------------------------------------------
 # Author:       Gerry Pidgeon
-# Created:      2025-12-03
-# Project:      GUI Framework v1.0
+# Created:      2025-12-12
+# Project:      SimpleTk v1.0
 # ====================================================================================================
 
 
@@ -75,49 +64,27 @@ logger = get_logger(__name__)
 # --- Additional project-level imports (append below this line only) ----------------------------------
 from gui.G00a_gui_packages import tk, ttk, init_gui_theme
 
-# Widget primitives and spacing tokens from G02a (G03's ONLY source for tokens)
-# G03 must NEVER import from G01 directly - all tokens come via G02a facade.
 from gui.G02a_widget_primitives import (
-    make_zebra_treeview,
-    make_treeview,
-    SPACING_XS,
-    SPACING_SM,
-    SPACING_MD,
+    make_zebra_treeview, make_treeview,
+    SPACING_XS, SPACING_SM, SPACING_MD,
 )
 
 
 # ====================================================================================================
 # 3. TYPE DEFINITIONS
-# ----------------------------------------------------------------------------------------------------
-# Type definitions for table column specifications.
 # ====================================================================================================
 
 @dataclass
 class TableColumn:
     """
-    Description:
-        Specification for a single table column.
+    Specification for a single table column.
 
-    Args:
-        id:
-            Column identifier (used as Treeview column name).
-        heading:
-            Display heading text.
-        width:
-            Column width in pixels.
-        anchor:
-            Text alignment: "w" (left), "center", "e" (right).
-        stretch:
-            Whether column stretches with window resize.
-
-    Returns:
-        None.
-
-    Raises:
-        None.
-
-    Notes:
-        - Use this dataclass to define table columns programmatically.
+    Attributes:
+        id: Column identifier (used as Treeview column name).
+        heading: Display heading text.
+        width: Column width in pixels.
+        anchor: Text alignment: "w" (left), "center", "e" (right).
+        stretch: Whether column stretches with window resize.
     """
     id: str
     heading: str
@@ -129,27 +96,13 @@ class TableColumn:
 @dataclass
 class TableResult:
     """
-    Description:
-        Result container returned by table builders.
+    Result container returned by table builders.
 
-    Args:
-        frame:
-            The container frame holding the table.
-        treeview:
-            The ttk.Treeview widget.
-        scrollbar_y:
-            Vertical scrollbar (if present).
-        scrollbar_x:
-            Horizontal scrollbar (if present).
-
-    Returns:
-        None.
-
-    Raises:
-        None.
-
-    Notes:
-        - Use treeview to insert/delete/select rows.
+    Attributes:
+        frame: The container frame holding the table.
+        treeview: The ttk.Treeview widget.
+        scrollbar_y: Vertical scrollbar (if present).
+        scrollbar_x: Horizontal scrollbar (if present).
     """
     frame: ttk.Frame
     treeview: ttk.Treeview
@@ -159,8 +112,6 @@ class TableResult:
 
 # ====================================================================================================
 # 4. BASIC TABLE PATTERNS
-# ----------------------------------------------------------------------------------------------------
-# Simple table creation helpers.
 # ====================================================================================================
 
 def create_table(
@@ -172,67 +123,40 @@ def create_table(
 ) -> TableResult:
     """
     Description:
-        Create a basic table with scrollbar.
+        Create a basic table with vertical scrollbar.
 
     Args:
-        parent:
-            The parent widget.
-        columns:
-            List of TableColumn specifications.
-        show_headings:
-            Whether to display column headings.
-        height:
-            Number of visible rows.
-        selectmode:
-            Selection mode: "browse" (single), "extended" (multi), "none".
+        parent: The parent widget.
+        columns: List of TableColumn specifications.
+        show_headings: Whether to display column headings.
+        height: Number of visible rows.
+        selectmode: Selection mode: "browse" (single), "extended" (multi), "none".
 
     Returns:
-        TableResult:
-            Container with frame, treeview, and scrollbar references.
+        TableResult: Container with frame, treeview, and scrollbar references.
 
     Raises:
         None.
 
     Notes:
-        - Treeview is configured with vertical scrollbar.
-        - Column IDs are taken from TableColumn.id.
-        - Zebra tags "odd" and "even" are pre-configured for use with insert_rows_zebra().
+        Zebra tags "odd" and "even" are pre-configured for insert_rows_zebra().
     """
-    # ---------------------------------------------------------
-    # 1. Structural Container (Your required lines)
-    # ---------------------------------------------------------
     frame = ttk.Frame(parent)
     frame.columnconfigure(0, weight=1)
     frame.rowconfigure(0, weight=1)
 
-    # ---------------------------------------------------------
-    # 2. Widget Creation (Delegated to G02a)
-    # ---------------------------------------------------------
-    # We use make_zebra_treeview() here.
-    # Why? Because G03d should not import GUI_PRIMARY/GUI_SECONDARY
-    # or manually configure tags. That is G02a's job.
-    # ---------------------------------------------------------
     column_ids = [col.id for col in columns]
 
     tree = make_zebra_treeview(
-        frame,
-        columns=column_ids,
-        show_headings=show_headings,
-        height=height,
-        selectmode=selectmode,
+        frame, columns=column_ids, show_headings=show_headings,
+        height=height, selectmode=selectmode,
     )
     tree.grid(row=0, column=0, sticky="nsew")
 
-    # ---------------------------------------------------------
-    # 3. Column Configuration (Pattern Logic)
-    # ---------------------------------------------------------
     for col in columns:
         tree.heading(col.id, text=col.heading, anchor=col.anchor)
         tree.column(col.id, width=col.width, anchor=col.anchor, stretch=col.stretch)
 
-    # ---------------------------------------------------------
-    # 4. Scrollbar
-    # ---------------------------------------------------------
     scrollbar_y = ttk.Scrollbar(frame, orient="vertical", command=tree.yview)
     scrollbar_y.grid(row=0, column=1, sticky="ns")
     tree.configure(yscrollcommand=scrollbar_y.set)
@@ -252,54 +176,41 @@ def create_table_with_horizontal_scroll(
         Create a table with both vertical and horizontal scrollbars.
 
     Args:
-        parent:
-            The parent widget.
-        columns:
-            List of TableColumn specifications.
-        show_headings:
-            Whether to display column headings.
-        height:
-            Number of visible rows.
-        selectmode:
-            Selection mode.
+        parent: The parent widget.
+        columns: List of TableColumn specifications.
+        show_headings: Whether to display column headings.
+        height: Number of visible rows.
+        selectmode: Selection mode.
 
     Returns:
-        TableResult:
-            Container with frame, treeview, and scrollbar references.
+        TableResult: Container with frame, treeview, and scrollbar references.
 
     Raises:
         None.
 
     Notes:
-        - Use when table content may be wider than viewport.
+        Use when table content may be wider than viewport.
     """
     frame = ttk.Frame(parent)
     frame.columnconfigure(0, weight=1)
     frame.rowconfigure(0, weight=1)
 
-    # Create treeview
     column_ids = [col.id for col in columns]
 
     tree = make_treeview(
-        frame,
-        columns=column_ids,
-        show_headings=show_headings,
-        height=height,
-        selectmode=selectmode,
+        frame, columns=column_ids, show_headings=show_headings,
+        height=height, selectmode=selectmode,
     )
     tree.grid(row=0, column=0, sticky="nsew")
 
-    # Configure columns
     for col in columns:
         tree.heading(col.id, text=col.heading, anchor=col.anchor)
         tree.column(col.id, width=col.width, anchor=col.anchor, stretch=col.stretch)
 
-    # Vertical scrollbar
     scrollbar_y = ttk.Scrollbar(frame, orient="vertical", command=tree.yview)
     scrollbar_y.grid(row=0, column=1, sticky="ns")
     tree.configure(yscrollcommand=scrollbar_y.set)
 
-    # Horizontal scrollbar
     scrollbar_x = ttk.Scrollbar(frame, orient="horizontal", command=tree.xview)
     scrollbar_x.grid(row=1, column=0, sticky="ew")
     tree.configure(xscrollcommand=scrollbar_x.set)
@@ -311,8 +222,6 @@ def create_table_with_horizontal_scroll(
 
 # ====================================================================================================
 # 5. STYLED TABLE PATTERNS
-# ----------------------------------------------------------------------------------------------------
-# Tables with additional styling.
 # ====================================================================================================
 
 def create_zebra_table(
@@ -329,38 +238,28 @@ def create_zebra_table(
         Create a table with alternating row colours (zebra striping).
 
     Args:
-        parent:
-            The parent widget.
-        columns:
-            List of TableColumn specifications.
-        odd_bg:
-            Background colour for odd rows.
-        even_bg:
-            Background colour for even rows.
-        show_headings:
-            Whether to display column headings.
-        height:
-            Number of visible rows.
-        selectmode:
-            Selection mode.
+        parent: The parent widget.
+        columns: List of TableColumn specifications.
+        odd_bg: Background colour for odd rows.
+        even_bg: Background colour for even rows.
+        show_headings: Whether to display column headings.
+        height: Number of visible rows.
+        selectmode: Selection mode.
 
     Returns:
-        TableResult:
-            Container with frame, treeview, and scrollbar references.
+        TableResult: Container with frame, treeview, and scrollbar references.
 
     Raises:
         None.
 
     Notes:
-        - Zebra striping is applied via Treeview tags.
-        - Call apply_zebra_striping() after inserting data.
+        Call apply_zebra_striping() after inserting data.
     """
     result = create_table(
         parent, columns, show_headings=show_headings,
         height=height, selectmode=selectmode
     )
 
-    # Configure zebra tags
     if odd_bg is not None:
         result.treeview.tag_configure("odd", background=odd_bg)
     if even_bg is not None:
@@ -375,8 +274,7 @@ def apply_zebra_striping(treeview: ttk.Treeview) -> None:
         Apply zebra striping to existing treeview rows.
 
     Args:
-        treeview:
-            The Treeview widget to stripe.
+        treeview: The Treeview widget to stripe.
 
     Returns:
         None.
@@ -385,8 +283,7 @@ def apply_zebra_striping(treeview: ttk.Treeview) -> None:
         None.
 
     Notes:
-        - Call after inserting or reordering data.
-        - Requires "odd" and "even" tags to be configured.
+        Call after inserting or reordering data. Requires "odd"/"even" tags configured.
     """
     children = treeview.get_children()
     for i, item in enumerate(children):
@@ -396,8 +293,6 @@ def apply_zebra_striping(treeview: ttk.Treeview) -> None:
 
 # ====================================================================================================
 # 6. TABLE WITH TOOLBAR PATTERN
-# ----------------------------------------------------------------------------------------------------
-# Table with toolbar for actions/filtering.
 # ====================================================================================================
 
 def create_table_with_toolbar(
@@ -413,31 +308,22 @@ def create_table_with_toolbar(
         Create a table with a toolbar row above it.
 
     Args:
-        parent:
-            The parent widget.
-        columns:
-            List of TableColumn specifications.
-        toolbar_height:
-            Minimum height for the toolbar.
-        show_headings:
-            Whether to display column headings.
-        height:
-            Number of visible rows.
-        selectmode:
-            Selection mode.
+        parent: The parent widget.
+        columns: List of TableColumn specifications.
+        toolbar_height: Minimum height for the toolbar.
+        show_headings: Whether to display column headings.
+        height: Number of visible rows.
+        selectmode: Selection mode.
 
     Returns:
-        tuple[ttk.Frame, ttk.Frame, TableResult]:
-            A tuple of (outer_frame, toolbar_frame, table_result).
+        tuple: (outer_frame, toolbar_frame, table_result).
 
     Raises:
         None.
 
     Notes:
-        - Toolbar is where caller adds buttons, filters, etc.
-        - Table expands to fill remaining space.
+        Toolbar is where caller adds buttons, filters, etc.
     """
-    # Import here to avoid circular dependency
     from gui.G03a_layout_patterns import toolbar_content_layout
 
     outer, toolbar, content = toolbar_content_layout(
@@ -455,8 +341,6 @@ def create_table_with_toolbar(
 
 # ====================================================================================================
 # 7. TABLE HELPER FUNCTIONS
-# ----------------------------------------------------------------------------------------------------
-# Utility functions for working with tables.
 # ====================================================================================================
 
 def insert_rows(
@@ -469,23 +353,18 @@ def insert_rows(
         Insert multiple rows into a treeview.
 
     Args:
-        treeview:
-            The Treeview widget.
-        rows:
-            List of row tuples (values matching column order).
-        clear_existing:
-            Whether to clear existing rows first.
+        treeview: The Treeview widget.
+        rows: List of row tuples (values matching column order).
+        clear_existing: Whether to clear existing rows first.
 
     Returns:
-        list[str]:
-            List of inserted item IDs.
+        list[str]: List of inserted item IDs.
 
     Raises:
         None.
 
     Notes:
-        - Returns item IDs for later reference.
-        - Use clear_existing=True for full data refresh.
+        Use clear_existing=True for full data refresh.
     """
     if clear_existing:
         for item in treeview.get_children():
@@ -498,6 +377,7 @@ def insert_rows(
 
     return item_ids
 
+
 def insert_rows_zebra(
     treeview: ttk.Treeview,
     rows: list[tuple[Any, ...]],
@@ -505,34 +385,21 @@ def insert_rows_zebra(
 ) -> list[str]:
     """
     Description:
-        Insert multiple rows into a Treeview and automatically apply
-        zebra striping based on the table’s configured "odd" and "even" tags.
+        Insert rows and automatically apply zebra striping.
 
     Args:
-        treeview:
-            The ttk.Treeview widget into which rows will be inserted.
-        rows:
-            A list of row tuples. Each tuple must match the column order
-            defined on the Treeview.
-        clear_existing:
-            Whether to delete all existing rows before inserting the new ones.
-            Defaults to False.
+        treeview: The Treeview widget.
+        rows: List of row tuples (values matching column order).
+        clear_existing: Whether to clear existing rows first.
 
     Returns:
-        list[str]:
-            A list of the inserted item IDs, in the same order as the input rows.
+        list[str]: List of inserted item IDs.
 
     Raises:
         None.
 
     Notes:
-        - This helper is a convenience wrapper that combines:
-              1. insert_rows()
-              2. apply_zebra_striping()
-          into a single call for tables that consistently use zebra striping.
-        - Tags "odd" and "even" must already be configured on the Treeview.
-          (These are created automatically when using create_zebra_table().)
-        - For tables without zebra striping, use insert_rows() instead.
+        Combines insert_rows() + apply_zebra_striping(). Requires tags configured.
     """
     item_ids = insert_rows(treeview, rows, clear_existing)
     apply_zebra_striping(treeview)
@@ -545,27 +412,22 @@ def get_selected_values(treeview: ttk.Treeview) -> list[tuple[Any, ...]]:
         Get values of selected rows.
 
     Args:
-        treeview:
-            The Treeview widget.
+        treeview: The Treeview widget.
 
     Returns:
-        list[tuple[Any, ...]]:
-            List of value tuples for selected rows.
+        list[tuple]: List of value tuples for selected rows.
 
     Raises:
         None.
 
     Notes:
-        - Returns empty list if no selection.
-        - Cast is required because ttk.Treeview.item() is loosely typed
-          and Pylance cannot guarantee it returns a tuple.
+        Returns empty list if no selection.
     """
     selected = treeview.selection()
     results: list[tuple[Any, ...]] = []
 
     for item in selected:
         raw = treeview.item(item, "values")
-        # Pylance thinks this may be str | tuple[str, ...] | None
         values = cast(tuple[Any, ...], raw)
         results.append(values)
 
@@ -578,8 +440,7 @@ def clear_table(treeview: ttk.Treeview) -> None:
         Remove all rows from a treeview.
 
     Args:
-        treeview:
-            The Treeview widget.
+        treeview: The Treeview widget.
 
     Returns:
         None.
@@ -588,7 +449,7 @@ def clear_table(treeview: ttk.Treeview) -> None:
         None.
 
     Notes:
-        - Preserves column configuration.
+        Preserves column configuration.
     """
     for item in treeview.get_children():
         treeview.delete(item)
@@ -596,8 +457,6 @@ def clear_table(treeview: ttk.Treeview) -> None:
 
 # ====================================================================================================
 # 8. PUBLIC API
-# ----------------------------------------------------------------------------------------------------
-# Expose all table pattern functions.
 # ====================================================================================================
 
 __all__ = [
@@ -622,8 +481,6 @@ __all__ = [
 
 # ====================================================================================================
 # 9. SELF-TEST
-# ----------------------------------------------------------------------------------------------------
-# Minimal smoke test demonstrating table patterns.
 # ====================================================================================================
 
 if __name__ == "__main__":
@@ -633,15 +490,16 @@ if __name__ == "__main__":
     root = tk.Tk()
     init_gui_theme()
     root.title("G03d Table Patterns — Smoke Test")
-    root.geometry("700x500")
+    root.geometry("800x750")
 
     try:
         main = ttk.Frame(root, padding=SPACING_MD)
         main.pack(fill="both", expand=True)
         main.columnconfigure(0, weight=1)
         main.rowconfigure(1, weight=1)
+        main.rowconfigure(3, weight=1)
+        main.rowconfigure(5, weight=1)
 
-        # Define columns
         columns = [
             TableColumn(id="id", heading="ID", width=50, anchor="center", stretch=False),
             TableColumn(id="name", heading="Name", width=150),
@@ -649,44 +507,77 @@ if __name__ == "__main__":
             TableColumn(id="status", heading="Status", width=80, anchor="center"),
         ]
 
-        # Table with toolbar
-        outer, toolbar, table_result = create_table_with_toolbar(
-            main, columns=columns, height=8
-        )
-        outer.grid(row=1, column=0, sticky="nsew")
-
-        # Add toolbar buttons
+        ttk.Label(main, text="Table with Toolbar:").grid(row=0, column=0, sticky="w", pady=(0, SPACING_XS))
+        outer, toolbar, table_result = create_table_with_toolbar(main, columns=columns, height=4)
+        assert outer is not None
+        assert toolbar is not None
+        assert table_result.treeview is not None
+        outer.grid(row=1, column=0, sticky="nsew", pady=(0, SPACING_MD))
         ttk.Button(toolbar, text="Add").pack(side="left", padx=SPACING_XS)
-        ttk.Button(toolbar, text="Edit").pack(side="left", padx=SPACING_XS)
         ttk.Button(toolbar, text="Delete").pack(side="left", padx=SPACING_XS)
-        ttk.Label(toolbar, text="|").pack(side="left", padx=SPACING_SM)
-        ttk.Entry(toolbar, width=20).pack(side="left", padx=SPACING_XS)
-        ttk.Button(toolbar, text="Search").pack(side="left", padx=SPACING_XS)
         logger.info("create_table_with_toolbar() created")
 
-        # Insert sample data
-        sample_data = [
+        toolbar_data = [
             (1, "Alice Smith", "alice@example.com", "Active"),
             (2, "Bob Jones", "bob@example.com", "Active"),
             (3, "Carol White", "carol@example.com", "Inactive"),
-            (4, "David Brown", "david@example.com", "Active"),
-            (5, "Eve Davis", "eve@example.com", "Pending"),
         ]
-        insert_rows_zebra(table_result.treeview, sample_data)
+        toolbar_ids = insert_rows_zebra(table_result.treeview, toolbar_data)
+        assert len(toolbar_ids) == 3
+        logger.info("insert_rows_zebra() added %d rows", len(toolbar_ids))
 
-        logger.info("insert_rows() added %d rows", len(sample_data))
-
-        # Zebra table example (in separate frame)
-        ttk.Label(main, text="Zebra-striped table:").grid(row=0, column=0, sticky="w", pady=(0, SPACING_SM))
-
-        zebra_columns = [
-            TableColumn(id="col1", heading="Column 1", width=100),
-            TableColumn(id="col2", heading="Column 2", width=100),
-            TableColumn(id="col3", heading="Column 3", width=100),
+        ttk.Label(main, text="Table with Horizontal Scroll:").grid(row=2, column=0, sticky="w", pady=(0, SPACING_XS))
+        horiz_columns = [
+            TableColumn(id="col1", heading="Column 1", width=150),
+            TableColumn(id="col2", heading="Column 2", width=150),
+            TableColumn(id="col3", heading="Column 3", width=150),
+            TableColumn(id="col4", heading="Column 4", width=150),
         ]
-        # Note: We'd need another container for this; skipping for brevity
+        horiz_result = create_table_with_horizontal_scroll(main, columns=horiz_columns, height=3)
+        assert horiz_result.frame is not None
+        assert horiz_result.scrollbar_x is not None
+        assert horiz_result.scrollbar_y is not None
+        horiz_result.frame.grid(row=3, column=0, sticky="nsew", pady=(0, SPACING_MD))
+        logger.info("create_table_with_horizontal_scroll() created")
 
-        logger.info("[G03d] All smoke tests passed.")
+        ttk.Label(main, text="Zebra Table:").grid(row=4, column=0, sticky="w", pady=(0, SPACING_XS))
+        zebra_result = create_zebra_table(main, columns=columns, height=4)
+        assert zebra_result.frame is not None
+        assert zebra_result.treeview is not None
+        zebra_result.frame.grid(row=5, column=0, sticky="nsew")
+        logger.info("create_zebra_table() created")
+
+        zebra_data = [
+            (10, "Frank", "frank@example.com", "Active"),
+            (11, "Grace", "grace@example.com", "Pending"),
+            (12, "Henry", "henry@example.com", "Active"),
+        ]
+        item_ids = insert_rows(zebra_result.treeview, zebra_data)
+        assert len(item_ids) == 3
+        logger.info("insert_rows() added %d rows", len(item_ids))
+
+        apply_zebra_striping(zebra_result.treeview)
+        logger.info("apply_zebra_striping() applied")
+
+        children = zebra_result.treeview.get_children()
+        if children:
+            zebra_result.treeview.selection_set(children[0])
+        selected = get_selected_values(zebra_result.treeview)
+        assert isinstance(selected, list)
+        assert len(selected) == 1
+        logger.info("get_selected_values() returned %d rows", len(selected))
+
+        clear_table(horiz_result.treeview)
+        assert len(horiz_result.treeview.get_children()) == 0
+        logger.info("clear_table() verified")
+
+        basic_result = create_table(main, columns=columns, height=2)
+        assert basic_result.frame is not None
+        assert basic_result.treeview is not None
+        assert basic_result.scrollbar_y is not None
+        logger.info("create_table() created (not displayed)")
+
+        logger.info("[G03d] All assertions passed (9 functions tested).")
         root.mainloop()
 
     except Exception as exc:

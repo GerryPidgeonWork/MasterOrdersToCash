@@ -1,5 +1,5 @@
 # ====================================================================================================
-# G03a_layout_patterns.py
+# G03a_layout_patterns.py                                                                [v1.0.0]
 # ----------------------------------------------------------------------------------------------------
 # Higher-level layout patterns for page composition.
 #
@@ -8,21 +8,10 @@
 #   - Define standard layouts: page layout, two-column, header+content+footer, etc.
 #   - Enable consistent page structure across the application.
 #
-# Relationships:
-#   - G01a_style_config   → spacing tokens (SPACING_SCALE).
-#   - G02b_layout_utils   → layout primitives (layout_row, grid_configure, stack_vertical, etc.).
-#   - G03a_layout_patterns → page-level layout patterns (THIS MODULE).
-#
-# Design principles:
-#   - No direct widget styling — use neutral ttk widgets or G02a primitives.
-#   - No Tk root creation — functions accept parent containers.
-#   - Functions return frames or composed structures.
-#   - Use explicit spacing via G01a tokens through G02b.
-#
 # ----------------------------------------------------------------------------------------------------
 # Author:       Gerry Pidgeon
-# Created:      2025-12-03
-# Project:      GUI Framework v1.0
+# Created:      2025-12-12
+# Project:      SimpleTk v1.0
 # ====================================================================================================
 
 
@@ -40,6 +29,7 @@ from __future__ import annotations           # Future-proof type hinting (PEP 56
 # --- Required for dynamic path handling and safe importing of core modules ---------------------------
 import sys                                   # Python interpreter access (path, environment, runtime)
 from pathlib import Path                     # Modern, object-oriented filesystem path handling
+from typing import Literal, get_args         # Type system for Literal types and validation
 
 # --- Ensure project root DOES NOT override site-packages --------------------------------------------
 project_root = str(Path(__file__).resolve().parent.parent)
@@ -75,65 +65,180 @@ logger = get_logger(__name__)
 # --- Additional project-level imports (append below this line only) ----------------------------------
 from gui.G00a_gui_packages import tk, ttk, init_gui_theme
 
-# Layout utilities from G02b
 from gui.G02b_layout_utils import layout_row
 
-# Spacing tokens from G02a (re-exported from G01a)
-from gui.G02a_widget_primitives import (
-    SPACING_SM,
-    SPACING_MD,
+from gui.G01b_style_base import (
+    SPACING_XS, SPACING_SM, SPACING_MD, SPACING_LG, SPACING_XL, SPACING_XXL,
+    ColourFamily, ShadeType, resolve_colour, get_default_shade,
 )
 
 
 # ====================================================================================================
 # 3. PAGE LAYOUT PATTERNS
-# ----------------------------------------------------------------------------------------------------
-# Standard page-level layout structures.
 # ====================================================================================================
 
 def page_layout(
     parent: tk.Misc,
     padding: int = SPACING_MD,
-    bg_colour: dict[str, str] | None = None,
-    bg_shade: str = "LIGHT",
+    bg_colour: str | ColourFamily | None = None,
+    bg_shade: ShadeType | None = None,
 ) -> ttk.Frame | tk.Frame:
     """
     Description:
         Create a standard page layout frame with consistent padding.
-        The returned frame expands to fill available space.
 
     Args:
-        parent:
-            The parent widget (typically BaseWindow.main_frame or a root).
-        padding:
-            Internal padding in pixels. Defaults to SPACING_MD.
-        bg_colour:
-            Optional background colour family dict (e.g., GUI_PRIMARY).
-            If provided, uses tk.Frame with explicit background.
-        bg_shade:
-            Shade key to use from bg_colour. Defaults to "LIGHT".
+        parent: The parent widget (typically BaseWindow.main_frame).
+        padding: Internal padding in pixels. Defaults to SPACING_MD.
+        bg_colour: Background colour preset or colour family dict.
+        bg_shade: Shade within the colour family. Defaults to MID if bg_colour set.
 
     Returns:
-        ttk.Frame | tk.Frame:
-            A frame configured as the main page container.
+        ttk.Frame | tk.Frame: Page container with content anchored to top.
 
     Raises:
         None.
 
     Notes:
-        - Frame uses grid with weight=1 for expansion.
-        - Caller should use .pack(fill="both", expand=True) or equivalent.
-        - When bg_colour is provided, returns tk.Frame with explicit background.
+        Caller should use .pack(fill="both", expand=True) or equivalent.
     """
-    if bg_colour is not None:
-        # Use tk.Frame for explicit background colour
-        frame = tk.Frame(parent, bg=bg_colour[bg_shade], padx=padding, pady=padding)
+    bg_colour_resolved = resolve_colour(bg_colour)
+
+    if bg_colour_resolved is not None and bg_shade is None:
+        bg_shade = "MID"
+
+    if bg_colour_resolved is not None and bg_shade is not None:
+        bg_hex = bg_colour_resolved[bg_shade]
+        outer = tk.Frame(parent, bg=bg_hex)
+        frame = tk.Frame(outer, bg=bg_hex, padx=padding, pady=padding)
+        frame.pack(side="top", fill="x", anchor="n")
     else:
-        # Use ttk.Frame for default theme styling
-        frame = ttk.Frame(parent, padding=padding)
-    
+        outer = ttk.Frame(parent)
+        frame = ttk.Frame(outer, padding=padding)
+        frame.pack(side="top", fill="x", anchor="n")
+
+    frame._outer = outer  # type: ignore[attr-defined]
+
+    def pack_outer(*args: Any, **kwargs: Any) -> Any:
+        return outer.pack(*args, **kwargs)
+
+    def grid_outer(*args: Any, **kwargs: Any) -> Any:
+        return outer.grid(*args, **kwargs)
+
+    def place_outer(*args: Any, **kwargs: Any) -> Any:
+        return outer.place(*args, **kwargs)
+
+    frame.pack = pack_outer  # type: ignore[method-assign]
+    frame.grid = grid_outer  # type: ignore[method-assign]
+    frame.place = place_outer  # type: ignore[method-assign]
+
     frame.columnconfigure(0, weight=1)
-    frame.rowconfigure(0, weight=1)
+    return frame
+
+
+def make_content_row(
+    parent: tk.Misc,
+    weights: dict[int, int] | tuple[int, ...] = (1,),
+    min_height: int = 0,
+    gap: int = SPACING_MD,
+    uniform: str = "cols",
+    bg_colour: str | ColourFamily | None = None,
+    bg_shade: ShadeType | None = None,
+    border_weight: str | None = None,
+    border_colour: str | ColourFamily | None = None,
+    border_shade: ShadeType | None = None,
+    padding: str | int | None = None,
+) -> ttk.Frame | tk.Frame:
+    """
+    Description:
+        Create a row container with weighted columns, auto-packed with spacing.
+
+    Args:
+        parent: The parent widget.
+        weights: Column weights as dict {0: 3, 1: 7} or tuple (3, 7).
+        min_height: Minimum row height in pixels. 0 = auto-size.
+        gap: Vertical gap below the row. Defaults to SPACING_MD.
+        uniform: Uniform group name for proportional column sizing.
+        bg_colour: Background colour preset or colour family dict.
+        bg_shade: Shade within the background family. Defaults to MID.
+        border_weight: Border weight token (THIN, MEDIUM, THICK).
+        border_colour: Border colour preset or dict.
+        border_shade: Shade within the border colour family.
+        padding: Padding token (XS, SM, MD, LG, XL, XXL) or int pixels.
+
+    Returns:
+        ttk.Frame | tk.Frame: Frame with columns configured. Has `.content` attribute.
+
+    Raises:
+        None.
+
+    Notes:
+        Add children with: child.grid(row=0, column=N, sticky="nsew").
+    """
+    if isinstance(weights, dict):
+        weight_tuple = tuple(weights.get(i, 1) for i in range(len(weights)))
+    else:
+        weight_tuple = weights
+
+    padding_map = {"XS": SPACING_XS, "SM": SPACING_SM, "MD": SPACING_MD,
+                   "LG": SPACING_LG, "XL": SPACING_XL, "XXL": SPACING_XXL}
+    if isinstance(padding, str):
+        padding_px = padding_map.get(padding.upper(), 0)
+    elif isinstance(padding, int):
+        padding_px = padding
+    else:
+        padding_px = 0
+
+    bg_colour_resolved = resolve_colour(bg_colour)
+    border_colour_resolved = resolve_colour(border_colour)
+
+    if bg_colour_resolved is not None and bg_shade is None:
+        bg_shade = "MID"
+    if border_colour_resolved is not None and border_shade is None:
+        border_shade = "MID"
+
+    if border_colour_resolved is not None and border_weight is not None and border_shade is not None:
+        border_widths = {"THIN": 1, "MEDIUM": 2, "THICK": 3}
+        border_px = border_widths.get(border_weight.upper(), 1) if isinstance(border_weight, str) else 1
+
+        border_hex = border_colour_resolved[border_shade]
+        outer = tk.Frame(parent, bg=border_hex)
+
+        if bg_colour_resolved is not None and bg_shade is not None:
+            bg_hex = bg_colour_resolved[bg_shade]
+            inner = tk.Frame(outer, bg=bg_hex, padx=padding_px, pady=padding_px)
+        else:
+            inner = ttk.Frame(outer, padding=padding_px)
+        inner.pack(fill="both", expand=True, padx=border_px, pady=border_px)
+
+        for col_index, weight in enumerate(weight_tuple):
+            inner.columnconfigure(col_index, weight=weight, uniform=uniform)
+
+        if min_height > 0:
+            inner.rowconfigure(0, weight=1, minsize=min_height)
+        else:
+            inner.rowconfigure(0, weight=1)
+
+        outer.content = inner  # type: ignore[attr-defined]
+        outer.pack(fill="x", pady=(0, gap))
+        return outer
+
+    if bg_colour_resolved is not None and bg_shade is not None:
+        bg_hex = bg_colour_resolved[bg_shade]
+        frame = tk.Frame(parent, bg=bg_hex, padx=padding_px, pady=padding_px)
+    else:
+        frame = ttk.Frame(parent, padding=padding_px)
+
+    for col_index, weight in enumerate(weight_tuple):
+        frame.columnconfigure(col_index, weight=weight, uniform=uniform)
+
+    if min_height > 0:
+        frame.rowconfigure(0, weight=1, minsize=min_height)
+    else:
+        frame.rowconfigure(0, weight=1)
+
+    frame.content = frame  # type: ignore[attr-defined]
+    frame.pack(fill="x", pady=(0, gap))
     return frame
 
 
@@ -146,33 +251,25 @@ def header_content_footer_layout(
     """
     Description:
         Create a three-region layout: header, content, footer.
-        The content region expands to fill available space.
 
     Args:
-        parent:
-            The parent widget.
-        header_height:
-            Minimum height for header region. 0 = auto-size.
-        footer_height:
-            Minimum height for footer region. 0 = auto-size.
-        padding:
-            Internal padding for the outer container.
+        parent: The parent widget.
+        header_height: Minimum header height. 0 = auto-size.
+        footer_height: Minimum footer height. 0 = auto-size.
+        padding: Internal padding for outer container.
 
     Returns:
-        tuple[ttk.Frame, ttk.Frame, ttk.Frame, ttk.Frame]:
-            A tuple of (outer_frame, header_frame, content_frame, footer_frame).
+        tuple: (outer_frame, header_frame, content_frame, footer_frame).
 
     Raises:
         None.
 
     Notes:
-        - Header is row 0, content is row 1, footer is row 2.
-        - Content row has weight=1 for vertical expansion.
-        - All regions span full width.
+        Content region (row 1) expands to fill available space.
     """
     outer = ttk.Frame(parent, padding=padding)
     outer.columnconfigure(0, weight=1)
-    outer.rowconfigure(1, weight=1)  # Content row expands
+    outer.rowconfigure(1, weight=1)
 
     header = ttk.Frame(outer)
     header.grid(row=0, column=0, sticky="ew")
@@ -202,27 +299,20 @@ def two_column_layout(
         Create a two-column layout with configurable weights.
 
     Args:
-        parent:
-            The parent widget.
-        left_weight:
-            Grid weight for the left column.
-        right_weight:
-            Grid weight for the right column.
-        gap:
-            Horizontal gap between columns in pixels.
-        padding:
-            Internal padding for the outer container.
+        parent: The parent widget.
+        left_weight: Grid weight for left column.
+        right_weight: Grid weight for right column.
+        gap: Horizontal gap between columns.
+        padding: Internal padding for outer container.
 
     Returns:
-        tuple[ttk.Frame, ttk.Frame, ttk.Frame]:
-            A tuple of (outer_frame, left_frame, right_frame).
+        tuple: (outer_frame, left_frame, right_frame).
 
     Raises:
         None.
 
     Notes:
-        - Both columns expand vertically.
-        - Gap is applied as padx on the right column.
+        Both columns expand vertically. Gap applied as padx on right column.
     """
     outer = ttk.Frame(parent, padding=padding)
     outer.columnconfigure(0, weight=left_weight)
@@ -249,25 +339,19 @@ def three_column_layout(
         Create a three-column layout with configurable weights.
 
     Args:
-        parent:
-            The parent widget.
-        weights:
-            Tuple of grid weights for (left, center, right) columns.
-        gap:
-            Horizontal gap between columns in pixels.
-        padding:
-            Internal padding for the outer container.
+        parent: The parent widget.
+        weights: Tuple of weights for (left, center, right) columns.
+        gap: Horizontal gap between columns.
+        padding: Internal padding for outer container.
 
     Returns:
-        tuple[ttk.Frame, ttk.Frame, ttk.Frame, ttk.Frame]:
-            A tuple of (outer_frame, left_frame, center_frame, right_frame).
+        tuple: (outer_frame, left_frame, center_frame, right_frame).
 
     Raises:
         None.
 
     Notes:
-        - All columns expand vertically.
-        - Gap is applied between columns.
+        All columns expand vertically.
     """
     outer = ttk.Frame(parent, padding=padding)
     outer.columnconfigure(0, weight=weights[0])
@@ -299,33 +383,26 @@ def sidebar_content_layout(
         Create a sidebar + content layout with fixed-width sidebar.
 
     Args:
-        parent:
-            The parent widget.
-        sidebar_width:
-            Fixed width for the sidebar in pixels.
-        sidebar_side:
-            Which side the sidebar appears on ("left" or "right").
-        gap:
-            Gap between sidebar and content.
-        padding:
-            Internal padding for the outer container.
+        parent: The parent widget.
+        sidebar_width: Fixed width for sidebar in pixels.
+        sidebar_side: Which side the sidebar appears on ("left" or "right").
+        gap: Gap between sidebar and content.
+        padding: Internal padding for outer container.
 
     Returns:
-        tuple[ttk.Frame, ttk.Frame, ttk.Frame]:
-            A tuple of (outer_frame, sidebar_frame, content_frame).
+        tuple: (outer_frame, sidebar_frame, content_frame).
 
     Raises:
         None.
 
     Notes:
-        - Sidebar has fixed width; content expands.
-        - Useful for navigation panels or tool palettes.
+        Sidebar has fixed width; content expands.
     """
     outer = ttk.Frame(parent, padding=padding)
     outer.rowconfigure(0, weight=1)
 
     sidebar = ttk.Frame(outer, width=sidebar_width)
-    sidebar.pack_propagate(False)  # Maintain fixed width
+    sidebar.pack_propagate(False)
 
     content = ttk.Frame(outer)
 
@@ -345,8 +422,6 @@ def sidebar_content_layout(
 
 # ====================================================================================================
 # 4. SECTION LAYOUT PATTERNS
-# ----------------------------------------------------------------------------------------------------
-# Patterns for content sections within pages.
 # ====================================================================================================
 
 def section_with_header(
@@ -356,26 +431,21 @@ def section_with_header(
 ) -> tuple[ttk.Frame, ttk.Frame, ttk.Frame]:
     """
     Description:
-        Create a section layout with a header area and content area.
+        Create a section layout with header area and content area.
 
     Args:
-        parent:
-            The parent widget.
-        header_padding:
-            Padding for the header region.
-        content_padding:
-            Padding for the content region.
+        parent: The parent widget.
+        header_padding: Padding for header region.
+        content_padding: Padding for content region.
 
     Returns:
-        tuple[ttk.Frame, ttk.Frame, ttk.Frame]:
-            A tuple of (outer_frame, header_frame, content_frame).
+        tuple: (outer_frame, header_frame, content_frame).
 
     Raises:
         None.
 
     Notes:
-        - Header is at the top; content expands below.
-        - Useful for titled sections or collapsible regions.
+        Header at top; content expands below.
     """
     outer = ttk.Frame(parent)
     outer.columnconfigure(0, weight=1)
@@ -398,28 +468,22 @@ def toolbar_content_layout(
 ) -> tuple[ttk.Frame, ttk.Frame, ttk.Frame]:
     """
     Description:
-        Create a layout with a toolbar row above content.
+        Create a layout with toolbar row above content.
 
     Args:
-        parent:
-            The parent widget.
-        toolbar_height:
-            Minimum height for the toolbar.
-        toolbar_padding:
-            Internal padding for the toolbar.
-        content_padding:
-            Internal padding for the content area.
+        parent: The parent widget.
+        toolbar_height: Minimum height for toolbar.
+        toolbar_padding: Internal padding for toolbar.
+        content_padding: Internal padding for content area.
 
     Returns:
-        tuple[ttk.Frame, ttk.Frame, ttk.Frame]:
-            A tuple of (outer_frame, toolbar_frame, content_frame).
+        tuple: (outer_frame, toolbar_frame, content_frame).
 
     Raises:
         None.
 
     Notes:
-        - Toolbar is fixed height; content expands.
-        - Useful for filter bars, action buttons, etc.
+        Toolbar fixed height; content expands.
     """
     outer = ttk.Frame(parent)
     outer.columnconfigure(0, weight=1)
@@ -437,8 +501,6 @@ def toolbar_content_layout(
 
 # ====================================================================================================
 # 5. ROW LAYOUT PATTERNS
-# ----------------------------------------------------------------------------------------------------
-# Patterns for horizontal arrangements.
 # ====================================================================================================
 
 def button_row(
@@ -452,33 +514,23 @@ def button_row(
         Create a frame configured for a row of buttons with alignment.
 
     Args:
-        parent:
-            The parent widget.
-        alignment:
-            Horizontal alignment of buttons ("left", "center", "right").
-        spacing:
-            Spacing between buttons (applied via pack padx).
-        padding:
-            Internal padding for the row frame.
+        parent: The parent widget.
+        alignment: Horizontal alignment ("left", "center", "right").
+        spacing: Spacing between buttons.
+        padding: Internal padding for row frame.
 
     Returns:
-        ttk.Frame:
-            A frame ready to receive buttons via pack().
+        ttk.Frame: Frame ready to receive buttons via pack().
 
     Raises:
         None.
 
     Notes:
-        - Buttons should be packed with side="left" and padx=spacing.
-        - Alignment is achieved by anchor positioning.
-        - Store spacing as attribute for consumer reference.
+        Stores .button_alignment and .button_spacing attributes.
     """
     frame = ttk.Frame(parent, padding=padding)
-
-    # Store alignment info for consumers
-    frame.button_alignment = alignment  # type: ignore
-    frame.button_spacing = spacing  # type: ignore
-
+    frame.button_alignment = alignment  # type: ignore[attr-defined]
+    frame.button_spacing = spacing  # type: ignore[attr-defined]
     return frame
 
 
@@ -492,23 +544,18 @@ def form_row(
         Create a two-column form row: label column + input column.
 
     Args:
-        parent:
-            The parent widget.
-        label_width:
-            Fixed width for the label column.
-        gap:
-            Gap between label and input columns.
+        parent: The parent widget.
+        label_width: Fixed width for label column.
+        gap: Gap between label and input columns.
 
     Returns:
-        tuple[ttk.Frame, ttk.Frame, ttk.Frame]:
-            A tuple of (row_frame, label_frame, input_frame).
+        tuple: (row_frame, label_frame, input_frame).
 
     Raises:
         None.
 
     Notes:
-        - Label column has fixed width; input column expands.
-        - Use for consistent form field alignment.
+        Label column fixed width; input column expands.
     """
     row = ttk.Frame(parent)
     row.columnconfigure(0, weight=0, minsize=label_width)
@@ -533,23 +580,18 @@ def split_row(
         Create a row split into multiple columns with specified weights.
 
     Args:
-        parent:
-            The parent widget.
-        weights:
-            Tuple of weights for each column.
-        gap:
-            Gap between columns.
+        parent: The parent widget.
+        weights: Tuple of weights for each column.
+        gap: Gap between columns.
 
     Returns:
-        tuple[ttk.Frame, list[ttk.Frame]]:
-            A tuple of (row_frame, list_of_column_frames).
+        tuple: (row_frame, list_of_column_frames).
 
     Raises:
         None.
 
     Notes:
-        - Generalised version of two_column_layout for rows.
-        - All columns are vertically centered.
+        Generalised version of two_column_layout for rows.
     """
     row = layout_row(parent, weights=weights)
 
@@ -565,13 +607,12 @@ def split_row(
 
 # ====================================================================================================
 # 6. PUBLIC API
-# ----------------------------------------------------------------------------------------------------
-# Expose all layout pattern functions.
 # ====================================================================================================
 
 __all__ = [
     # Page layouts
     "page_layout",
+    "make_content_row",
     "header_content_footer_layout",
     "two_column_layout",
     "three_column_layout",
@@ -588,8 +629,6 @@ __all__ = [
 
 # ====================================================================================================
 # 7. SELF-TEST
-# ----------------------------------------------------------------------------------------------------
-# Minimal smoke test demonstrating layout patterns.
 # ====================================================================================================
 
 if __name__ == "__main__":
@@ -597,53 +636,102 @@ if __name__ == "__main__":
     logger.info("[G03a] Running G03a_layout_patterns smoke test...")
 
     root = tk.Tk()
-    init_gui_theme() # CRITICAL: Call immediately after creating root
+    init_gui_theme()
     root.title("G03a Layout Patterns — Smoke Test")
-    root.geometry("800x600")
+    root.geometry("900x700")
 
     try:
-        # Test header_content_footer_layout
-        outer, header, content, footer = header_content_footer_layout(
-            root, header_height=50, footer_height=30, padding=SPACING_MD
-        )
-        outer.pack(fill="both", expand=True)
+        page = page_layout(root, padding=SPACING_MD)
+        assert page is not None, "page_layout should return a frame"
+        page.pack(fill="both", expand=True)
+        logger.info("page_layout() created")
 
-        # Header content
-        ttk.Label(header, text="Header Region").pack(side="left", padx=10)
+        outer, header, content, footer = header_content_footer_layout(
+            page, header_height=50, footer_height=40, padding=SPACING_SM
+        )
+        assert outer is not None
+        outer.pack(fill="both", expand=True)
         logger.info("header_content_footer_layout() created")
 
-        # Two-column layout inside content
+        ttk.Label(header, text="Header Region").pack(side="left", padx=SPACING_SM)
+
         content_outer, left, right = two_column_layout(
             content, left_weight=1, right_weight=2, gap=SPACING_MD
         )
+        assert content_outer is not None
         content_outer.pack(fill="both", expand=True)
-
-        ttk.Label(left, text="Left Column (weight=1)").pack(padx=10, pady=10)
-        ttk.Label(right, text="Right Column (weight=2)").pack(padx=10, pady=10)
         logger.info("two_column_layout() created")
 
-        # Toolbar in right column
-        toolbar_outer, toolbar, toolbar_content = toolbar_content_layout(
-            right, toolbar_height=35
-        )
-        toolbar_outer.pack(fill="both", expand=True, pady=10)
+        ttk.Label(left, text="Left Column (weight=1)").pack(padx=SPACING_SM, pady=SPACING_SM)
 
-        ttk.Button(toolbar, text="Action 1").pack(side="left", padx=2)
-        ttk.Button(toolbar, text="Action 2").pack(side="left", padx=2)
-        ttk.Label(toolbar_content, text="Content below toolbar").pack(padx=10, pady=10)
+        section_outer, section_header, section_content = section_with_header(
+            left, header_padding=SPACING_XS, content_padding=SPACING_SM
+        )
+        assert section_outer is not None
+        section_outer.pack(fill="x", pady=SPACING_SM)
+        ttk.Label(section_header, text="Section Header").pack(anchor="w")
+        ttk.Label(section_content, text="Section Content").pack(anchor="w")
+        logger.info("section_with_header() created")
+
+        form_outer, label_frame, input_frame = form_row(left, label_width=80, gap=SPACING_SM)
+        assert form_outer is not None
+        form_outer.pack(fill="x", pady=SPACING_XS)
+        ttk.Label(label_frame, text="Label:").pack(anchor="w")
+        ttk.Entry(input_frame).pack(fill="x")
+        logger.info("form_row() created")
+
+        toolbar_outer, toolbar, toolbar_content = toolbar_content_layout(
+            right, toolbar_height=35, toolbar_padding=SPACING_XS
+        )
+        assert toolbar_outer is not None
+        toolbar_outer.pack(fill="both", expand=True, pady=SPACING_SM)
+        ttk.Button(toolbar, text="Action 1").pack(side="left", padx=SPACING_XS)
+        ttk.Button(toolbar, text="Action 2").pack(side="left", padx=SPACING_XS)
+        ttk.Label(toolbar_content, text="Content below toolbar").pack(padx=SPACING_SM, pady=SPACING_SM)
         logger.info("toolbar_content_layout() created")
 
-        # Footer content
-        ttk.Label(footer, text="Footer Region").pack(side="left", padx=10)
+        three_outer, col_left, col_center, col_right = three_column_layout(
+            toolbar_content, weights=(1, 2, 1), gap=SPACING_SM
+        )
+        assert three_outer is not None
+        three_outer.pack(fill="x", pady=SPACING_XS)
+        ttk.Label(col_left, text="L").pack()
+        ttk.Label(col_center, text="Center").pack()
+        ttk.Label(col_right, text="R").pack()
+        logger.info("three_column_layout() created")
 
-        # Button row test
-        btn_row = button_row(footer, alignment="right")
+        split_outer, split_cols = split_row(toolbar_content, weights=(1, 1, 1), gap=SPACING_SM)
+        assert split_outer is not None
+        assert len(split_cols) == 3
+        split_outer.pack(fill="x", pady=SPACING_XS)
+        for i, col in enumerate(split_cols):
+            ttk.Label(col, text=f"Split {i+1}").pack()
+        logger.info("split_row() created")
+
+        content_row = make_content_row(
+            toolbar_content, weights=(1, 2), gap=SPACING_SM, padding="SM"
+        )
+        assert content_row is not None
+        logger.info("make_content_row() created")
+
+        sidebar_outer, sidebar, sidebar_content = sidebar_content_layout(
+            footer, sidebar_width=100, sidebar_side="left", gap=SPACING_SM
+        )
+        assert sidebar_outer is not None
+        logger.info("sidebar_content_layout() created")
+
+        ttk.Label(footer, text="Footer Region").pack(side="left", padx=SPACING_SM)
+
+        btn_row = button_row(footer, alignment="right", spacing=SPACING_XS, padding=SPACING_SM)
+        assert btn_row is not None
+        assert hasattr(btn_row, "button_alignment")
+        assert hasattr(btn_row, "button_spacing")
         btn_row.pack(side="right")
-        ttk.Button(btn_row, text="Cancel").pack(side="left", padx=2)
-        ttk.Button(btn_row, text="OK").pack(side="left", padx=2)
+        ttk.Button(btn_row, text="Cancel").pack(side="left", padx=SPACING_XS)
+        ttk.Button(btn_row, text="OK").pack(side="left", padx=SPACING_XS)
         logger.info("button_row() created")
 
-        logger.info("[G03a] All smoke tests passed.")
+        logger.info("[G03a] All assertions passed (11 functions tested).")
         root.mainloop()
 
     except Exception as exc:

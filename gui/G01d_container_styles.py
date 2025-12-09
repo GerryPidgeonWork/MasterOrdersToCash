@@ -1,5 +1,5 @@
 # ====================================================================================================
-# G01d_container_styles.py
+# G01d_container_styles.py                                                               [v1.0.0]
 # ----------------------------------------------------------------------------------------------------
 # Container style resolver for frames, cards, panels, and sections.
 #
@@ -25,15 +25,10 @@
 # Style naming pattern (via build_style_cache_key in G01b):
 #   Container_<KIND>_bg_<FAMILY>_<SHADE>_border_<WEIGHT>_pad_<TOKEN|NONE>
 #
-#   KIND values (semantic):
-#       SURFACE, CARD, PANEL, SECTION
-#   FAMILY values:
-#       PRIMARY, SECONDARY, SUCCESS, WARNING, ERROR (or any registered family)
-#
 # ----------------------------------------------------------------------------------------------------
 # Author:       Gerry Pidgeon
-# Created:      2025-12-02
-# Project:      GUI Framework v1.0
+# Created:      2025-12-12
+# Project:      SimpleTk v1.0
 # ====================================================================================================
 
 
@@ -97,9 +92,12 @@ from gui.G01b_style_base import (
     ContainerKindType,
     # Utilities
     SPACING_SCALE,
+    SPACING_SM,
     BORDER_WEIGHTS,
     build_style_cache_key,
     detect_colour_family_name,
+    resolve_colour,
+    get_default_shade,
     # Design tokens (re-exported from G01a)
     GUI_PRIMARY,
     GUI_SECONDARY,
@@ -110,32 +108,18 @@ from gui.G01b_style_base import (
 
 
 # ====================================================================================================
-# 4. CONTAINER STYLE CACHE
+# 3. CONTAINER STYLE CACHE
 # ----------------------------------------------------------------------------------------------------
 # A dedicated cache for storing all resolved ttk container style names.
-#
-# Purpose:
-#   - Ensure idempotent behaviour: repeated calls with the same parameters
-#     return the same style name.
-#   - Prevent duplicate ttk.Style registrations.
-#   - Act as the single source of truth for created container styles.
 # ====================================================================================================
+
 CONTAINER_STYLE_CACHE: dict[str, str] = {}
 
 
 # ====================================================================================================
-# 5. INTERNAL HELPERS
+# 4. INTERNAL HELPERS
 # ----------------------------------------------------------------------------------------------------
 # Pure internal utilities supporting container-style resolution.
-#
-# Purpose:
-#   - Construct canonical style names (build_container_style_name).
-#   - Resolve border widths and padding tokens into pixel values.
-#   - Resolve semantic roles into colour families.
-#   - DO NOT create ttk styles or modify global state.
-#
-# Notes:
-#   - detect_colour_family_name() is imported from G01b (single source of truth).
 # ====================================================================================================
 
 # Semantic mapping of roles → colour families
@@ -157,31 +141,23 @@ def build_container_style_name(
 ) -> str:
     """
     Description:
-        Construct the canonical style name for a container widget using the
-        shared build_style_cache_key helper from G01b.
+        Construct the canonical style name for a container widget.
 
     Args:
-        kind:
-            Container kind token ("SURFACE", "CARD", "PANEL", "SECTION").
-        bg_family_name:
-            Background colour family name (e.g., "PRIMARY", "SECONDARY").
-        bg_shade:
-            Background shade token (e.g., "LIGHT", "MID").
-        border_weight:
-            Border weight token ("NONE", "THIN", "MEDIUM", "THICK").
-        padding_token:
-            Padding token ("NONE", "XS", "SM", "MD", "LG", "XL", "XXL").
+        kind: Container kind token (SURFACE, CARD, PANEL, SECTION).
+        bg_family_name: Background colour family name (e.g., PRIMARY).
+        bg_shade: Background shade token (e.g., LIGHT, MID).
+        border_weight: Border weight token (NONE, THIN, MEDIUM, THICK).
+        padding_token: Padding token (NONE, XS, SM, MD, LG, XL, XXL).
 
     Returns:
-        str:
-            Deterministic, human-readable style name.
+        str: Deterministic, human-readable style name.
 
     Raises:
         None.
 
     Notes:
-        - Uses build_style_cache_key from G01b for consistency.
-        - The name encodes semantic intent, not raw hex values.
+        Uses build_style_cache_key from G01b for consistency.
     """
     return build_style_cache_key(
         "Container",
@@ -199,19 +175,16 @@ def resolve_border_width_internal(border: BorderWeightType | None) -> int:
         Convert a BorderWeightType token into a numeric pixel border width.
 
     Args:
-        border:
-            Border weight token or None.
+        border: Border weight token or None.
 
     Returns:
-        int:
-            Pixel width (0 for NONE or None).
+        int: Pixel width (0 for NONE or None).
 
     Raises:
-        KeyError:
-            If border is not a valid BORDER_WEIGHTS key.
+        KeyError: If border is not a valid BORDER_WEIGHTS key.
 
     Notes:
-        - Returns 0 for None or "NONE".
+        Returns 0 for None or "NONE".
     """
     if border is None or str(border).upper() == "NONE":
         return 0
@@ -229,27 +202,19 @@ def resolve_border_width_internal(border: BorderWeightType | None) -> int:
 def resolve_padding_internal(padding: SpacingType | None) -> tuple[int, int, str]:
     """
     Description:
-        Resolve a spacing token into symmetric (pad_x, pad_y) pixel values and
-        a semantic padding label for cache keys.
+        Resolve a spacing token into symmetric (pad_x, pad_y) pixel values.
 
     Args:
-        padding:
-            Spacing token ("XS", "SM", "MD", "LG", "XL", "XXL") or None.
-            Passing None disables padding entirely.
+        padding: Spacing token (XS, SM, MD, LG, XL, XXL) or None.
 
     Returns:
-        tuple[int, int, str]:
-            Symmetric padding values (pad_x, pad_y) and a padding label.
-            The label will be "NONE" when padding is None.
+        tuple[int, int, str]: (pad_x, pad_y, label). Label is "NONE" when None.
 
     Raises:
-        KeyError:
-            If padding is not a valid SPACING_SCALE key.
+        KeyError: If padding is not a valid SPACING_SCALE key.
 
     Notes:
-        - Passing None returns (0, 0, "NONE").
-        - "NONE" is an internal style-token label and is not accepted
-          as an input value; use padding=None instead.
+        Passing None returns (0, 0, "NONE").
     """
     if padding is None:
         return (0, 0, "NONE")
@@ -266,21 +231,11 @@ def resolve_padding_internal(padding: SpacingType | None) -> tuple[int, int, str
 
 
 # ====================================================================================================
-# 6. CONTAINER STYLE RESOLUTION (PUBLIC API – CORE ENGINE)
+# 5. CONTAINER STYLE RESOLUTION (PUBLIC API – CORE ENGINE)
 # ----------------------------------------------------------------------------------------------------
 # The main container-style resolver: resolve_container_style().
-#
-# Purpose:
-#   - Convert high-level semantic parameters (role, shade, kind, border, padding)
-#     into concrete ttk container styles.
-#   - Apply deterministic naming and idempotent caching.
-#   - Register styles with ttk.Style(), including background, border, and padding.
-#
-# Notes:
-#   - This is the ONLY place that creates ttk styles for container widgets.
-#   - New in this version: optional bg_colour/bg_shade override, mirroring
-#     the flexibility of G01c_text_styles.
 # ====================================================================================================
+
 def resolve_container_style(
     role: ContainerRoleType = "SECONDARY",
     shade: ShadeType = "LIGHT",
@@ -289,7 +244,7 @@ def resolve_container_style(
     padding: SpacingType | None = "MD",
     relief: str = "flat",
     *,
-    bg_colour: ColourFamily | None = None,
+    bg_colour: str | ColourFamily | None = None,
     bg_shade: ShadeType | None = None,
 ) -> str:
     """
@@ -297,63 +252,26 @@ def resolve_container_style(
         Resolve a complete ttk container style with background, border, padding,
         and relief. Styles are created lazily and cached by a deterministic key.
 
-        This function supports **two modes** of background selection:
-
-        1) Semantic mode (existing behaviour, backwards-compatible):
-               role + shade  → background family + shade
-
-        2) Direct family override (new flexible mode):
-               bg_colour + bg_shade → background family + shade
-
-        In both cases, style names are built from semantic family names rather
-        than raw hex values.
-
     Args:
-        role:
-            Semantic colour role. One of: "PRIMARY", "SECONDARY", "SUCCESS",
-            "WARNING", "ERROR". Defaults to "SECONDARY".
-            Ignored if bg_colour/bg_shade are provided.
-        shade:
-            Shade within the role's colour family. One of: "LIGHT", "MID",
-            "DARK", "XDARK". Defaults to "LIGHT".
-            Ignored if bg_colour/bg_shade are provided.
-        kind:
-            Container kind for semantic naming. One of: "SURFACE", "CARD",
-            "PANEL", "SECTION". Defaults to "SURFACE".
-        border:
-            Border weight token. One of: "NONE", "THIN", "MEDIUM", "THICK",
-            or None. Defaults to "THIN".
-        padding:
-            Internal padding token. One of: "XS", "SM", "MD", "LG", "XL",
-            "XXL", or None. Defaults to "MD".
-        relief:
-            Tkinter relief style. Common values: "flat", "raised", "sunken",
-            "solid", "ridge", "groove". Defaults to "flat".
-        bg_colour:
-            Optional explicit background colour family dictionary. If provided,
-            bg_shade must also be provided and role/shade are ignored.
-        bg_shade:
-            Optional background shade token within bg_colour. Must be provided
-            when bg_colour is provided.
+        role: Semantic colour role (PRIMARY, SECONDARY, SUCCESS, WARNING, ERROR).
+            Ignored if bg_colour is provided.
+        shade: Shade within the role's colour family (LIGHT, MID, DARK, XDARK).
+            Ignored if bg_colour is provided.
+        kind: Container kind for semantic naming (SURFACE, CARD, PANEL, SECTION).
+        border: Border weight token (NONE, THIN, MEDIUM, THICK) or None.
+        padding: Internal padding token (XS, SM, MD, LG, XL, XXL) or None.
+        relief: Tkinter relief style (flat, raised, sunken, solid, ridge, groove).
+        bg_colour: Optional explicit background colour preset or family dict.
+        bg_shade: Optional background shade token within bg_colour.
 
     Returns:
-        str:
-            The registered ttk style name. Use directly on ttk.Frame:
-                ttk.Frame(parent, style=style_name)
+        str: The registered ttk style name for use with ttk.Frame.
 
     Raises:
-        KeyError:
-            If role is invalid, or shade/bg_shade are not valid keys for their
-            respective colour families.
-        ValueError:
-            If bg_colour is provided without bg_shade, or bg_shade without
-            bg_colour.
+        KeyError: If role/shade/bg_shade are invalid for their colour families.
 
     Notes:
-        - SECONDARY/LIGHT is the default for neutral backgrounds.
-        - Border width 0 effectively hides borders regardless of relief.
-        - bg_colour/bg_shade provide full surface control using design tokens,
-          mirroring G01c_text_styles behaviour.
+        SECONDARY/LIGHT is the default for neutral backgrounds.
     """
     if logger.isEnabledFor(logging.DEBUG):
         logger.debug("———[G01d DEBUG START]———————————————————————————")
@@ -363,34 +281,38 @@ def resolve_container_style(
         )
         logger.debug(
             "INPUT → bg_colour=%s, bg_shade=%s",
-            detect_colour_family_name(bg_colour), bg_shade
+            bg_colour, bg_shade
         )
 
     # ------------------------------------------------------------------------------------------------
     # Step 1: Resolve background colour family + shade
     # ------------------------------------------------------------------------------------------------
-    if (bg_colour is not None and bg_shade is None) or (
-        bg_colour is None and bg_shade is not None
-    ):
-        raise ValueError(
-            "[G01d] bg_colour and bg_shade must either both be provided or both be None."
+    bg_colour_resolved = resolve_colour(bg_colour)
+
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug(
+            "RESOLVED → bg_colour: %s",
+            detect_colour_family_name(bg_colour_resolved)
         )
 
     # Normalise shade tokens to uppercase before validation
     shade_normalised: str = shade.upper()
     bg_shade_normalised: str | None = bg_shade.upper() if bg_shade is not None else None
 
-    if bg_colour is not None and bg_shade_normalised is not None:
+    if bg_colour_resolved is not None:
         # Direct family override mode
-        if bg_shade_normalised not in bg_colour:
+        if bg_shade_normalised is None:
+            bg_shade_normalised = get_default_shade(bg_colour_resolved)
+
+        if bg_shade_normalised not in bg_colour_resolved:
             raise KeyError(
                 f"[G01d] Invalid bg_shade '{bg_shade_normalised}' for this colour family. "
-                f"Available shades: {list(bg_colour.keys())}"
+                f"Available shades: {list(bg_colour_resolved.keys())}"
             )
-        bg_family: ColourFamily = bg_colour
+        bg_family: ColourFamily = bg_colour_resolved
         bg_shade_token: str = bg_shade_normalised
     else:
-        # Semantic role/shade mode (existing behaviour)
+        # Semantic role/shade mode
         role_key = role.upper()
         if role_key not in CONTAINER_ROLE_FAMILIES:
             raise KeyError(
@@ -449,7 +371,6 @@ def resolve_container_style(
     # ------------------------------------------------------------------------------------------------
     style = ttk.Style()
 
-    # Try to base layout on TFrame so ttk knows how to render it
     try:
         base_layout = style.layout("TFrame")
         style.layout(style_name, base_layout)
@@ -476,59 +397,20 @@ def resolve_container_style(
 
 
 # ====================================================================================================
-# 7. CONVENIENCE HELPERS
+# 6. CONVENIENCE HELPERS
 # ----------------------------------------------------------------------------------------------------
-# Simple wrappers around resolve_container_style() that provide commonly used
-# semantic presets (cards, panels, sections, surfaces).
-#
-# Purpose:
-#   - Reduce boilerplate when creating frequently-used container styles.
-#   - Keep component construction clean.
-#
-# Notes:
-#   - All helpers must defer to resolve_container_style() internally.
-#   - No caching or style creation logic belongs here.
+# Simple forwarders to resolve_container_style() with semantic presets.
 # ====================================================================================================
+
 def container_style_card(
     role: ContainerRoleType = "SECONDARY",
     shade: ShadeType = "LIGHT",
     border: BorderWeightType | None = "THIN",
     padding: SpacingType | None = "MD",
 ) -> str:
-    """
-    Description:
-        Create a card-style container with raised relief.
-
-    Args:
-        role:
-            Semantic colour role. Defaults to "SECONDARY".
-        shade:
-            Shade within the role. Defaults to "LIGHT".
-        border:
-            Border weight token. Defaults to "THIN".
-        padding:
-            Internal padding token. Defaults to "MD".
-
-    Returns:
-        str:
-            Registered ttk style name.
-
-    Raises:
-        KeyError:
-            If role or shade is invalid.
-
-    Notes:
-        - Uses "raised" relief for card elevation effect.
-        - Background family/shade can still be overridden via bg_colour/bg_shade
-          by calling resolve_container_style directly.
-    """
+    """Return card-style container (raised relief). Forwards to resolve_container_style()."""
     return resolve_container_style(
-        role=role,
-        shade=shade,
-        kind="CARD",
-        border=border,
-        padding=padding,
-        relief="raised",
+        role=role, shade=shade, kind="CARD", border=border, padding=padding, relief="raised"
     )
 
 
@@ -538,38 +420,9 @@ def container_style_panel(
     border: BorderWeightType | None = "THIN",
     padding: SpacingType | None = "SM",
 ) -> str:
-    """
-    Description:
-        Create a panel-style container with solid relief.
-
-    Args:
-        role:
-            Semantic colour role. Defaults to "SECONDARY".
-        shade:
-            Shade within the role. Defaults to "LIGHT".
-        border:
-            Border weight token. Defaults to "THIN".
-        padding:
-            Internal padding token. Defaults to "SM".
-
-    Returns:
-        str:
-            Registered ttk style name.
-
-    Raises:
-        KeyError:
-            If role or shade is invalid.
-
-    Notes:
-        - Uses "solid" relief for clear boundary.
-    """
+    """Return panel-style container (solid relief). Forwards to resolve_container_style()."""
     return resolve_container_style(
-        role=role,
-        shade=shade,
-        kind="PANEL",
-        border=border,
-        padding=padding,
-        relief="solid",
+        role=role, shade=shade, kind="PANEL", border=border, padding=padding, relief="solid"
     )
 
 
@@ -579,38 +432,9 @@ def container_style_section(
     border: BorderWeightType | None = "THIN",
     padding: SpacingType | None = "SM",
 ) -> str:
-    """
-    Description:
-        Create a section-style container with flat relief.
-
-    Args:
-        role:
-            Semantic colour role. Defaults to "SECONDARY".
-        shade:
-            Shade within the role. Defaults to "LIGHT".
-        border:
-            Border weight token. Defaults to "THIN".
-        padding:
-            Internal padding token. Defaults to "SM".
-
-    Returns:
-        str:
-            Registered ttk style name.
-
-    Raises:
-        KeyError:
-            If role or shade is invalid.
-
-    Notes:
-        - Uses "flat" relief for subtle grouping.
-    """
+    """Return section-style container (flat relief). Forwards to resolve_container_style()."""
     return resolve_container_style(
-        role=role,
-        shade=shade,
-        kind="SECTION",
-        border=border,
-        padding=padding,
-        relief="flat",
+        role=role, shade=shade, kind="SECTION", border=border, padding=padding, relief="flat"
     )
 
 
@@ -619,68 +443,20 @@ def container_style_surface(
     shade: ShadeType = "LIGHT",
     padding: SpacingType | None = "MD",
 ) -> str:
-    """
-    Description:
-        Create a surface-style container with no border.
-
-    Args:
-        role:
-            Semantic colour role. Defaults to "SECONDARY".
-        shade:
-            Shade within the role. Defaults to "LIGHT".
-        padding:
-            Internal padding token. Defaults to "MD".
-
-    Returns:
-        str:
-            Registered ttk style name.
-
-    Raises:
-        KeyError:
-            If role or shade is invalid.
-
-    Notes:
-        - Uses no border and flat relief for background surfaces.
-    """
+    """Return surface-style container (no border, flat). Forwards to resolve_container_style()."""
     return resolve_container_style(
-        role=role,
-        shade=shade,
-        kind="SURFACE",
-        border="NONE",
-        padding=padding,
-        relief="flat",
+        role=role, shade=shade, kind="SURFACE", border="NONE", padding=padding, relief="flat"
     )
 
 
 # ====================================================================================================
-# 8. CACHE INTROSPECTION
+# 7. CACHE INTROSPECTION
 # ----------------------------------------------------------------------------------------------------
 # Diagnostic functions for inspecting and managing the container style cache.
-#
-# Purpose:
-#   - Enable runtime cache inspection for debugging.
-#   - Support cache clearing for theme switching or testing.
 # ====================================================================================================
+
 def get_container_style_cache_info() -> dict[str, int | list[str]]:
-    """
-    Description:
-        Return diagnostic information about the container style cache.
-
-    Args:
-        None.
-
-    Returns:
-        dict[str, int | list[str]]:
-            Dictionary containing:
-            - "count": Number of cached styles
-            - "keys": List of all cached style names
-
-    Raises:
-        None.
-
-    Notes:
-        - Useful for debugging and verifying cache behaviour.
-    """
+    """Return diagnostic info about the container style cache (count and keys)."""
     return {
         "count": len(CONTAINER_STYLE_CACHE),
         "keys": list(CONTAINER_STYLE_CACHE.keys()),
@@ -688,30 +464,15 @@ def get_container_style_cache_info() -> dict[str, int | list[str]]:
 
 
 def clear_container_style_cache() -> None:
-    """
-    Description:
-        Clear all entries from the container style cache.
-
-    Args:
-        None.
-
-    Returns:
-        None.
-
-    Raises:
-        None.
-
-    Notes:
-        - Use for theme switching or testing.
-        - Does NOT unregister styles from ttk.Style().
-    """
+    """Clear all entries from the container style cache. Does NOT unregister styles from ttk."""
     CONTAINER_STYLE_CACHE.clear()
     logger.info("[G01d] Cleared container style cache")
 
 
 # ====================================================================================================
-# 9. PUBLIC API
+# 8. PUBLIC API
 # ----------------------------------------------------------------------------------------------------
+
 __all__ = [
     # Main engine
     "resolve_container_style",
@@ -727,8 +488,9 @@ __all__ = [
 
 
 # ====================================================================================================
-# 10. SELF-TEST
+# 9. SELF-TEST
 # ----------------------------------------------------------------------------------------------------
+
 if __name__ == "__main__":
     init_logging()
     logger.info("[G01d] Running G01d_container_styles self-test...")
@@ -746,29 +508,41 @@ if __name__ == "__main__":
 
         # Primary Surface
         style_surface = container_style_surface(role="PRIMARY", shade="LIGHT")
+        logger.info("Surface style: %s", style_surface)
+        assert style_surface, "Surface style should not be empty"
+        assert "SURFACE" in style_surface, "Surface style should contain SURFACE"
         frame1 = ttk.Frame(main, style=style_surface)
-        frame1.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
-        ttk.Label(frame1, text="Primary Surface (no border)").pack(padx=10, pady=10)
+        frame1.grid(row=0, column=0, sticky="nsew", padx=SPACING_SM, pady=SPACING_SM)
+        ttk.Label(frame1, text="Primary Surface (no border)").pack(padx=SPACING_SM, pady=SPACING_SM)
 
         # Secondary Card
         style_card = container_style_card(role="SECONDARY", shade="MID")
+        logger.info("Card style: %s", style_card)
+        assert style_card, "Card style should not be empty"
+        assert "CARD" in style_card, "Card style should contain CARD"
         frame2 = ttk.Frame(main, style=style_card)
-        frame2.grid(row=1, column=0, sticky="nsew", padx=10, pady=10)
-        ttk.Label(frame2, text="Secondary Card (raised)").pack(padx=10, pady=10)
+        frame2.grid(row=1, column=0, sticky="nsew", padx=SPACING_SM, pady=SPACING_SM)
+        ttk.Label(frame2, text="Secondary Card (raised)").pack(padx=SPACING_SM, pady=SPACING_SM)
 
         # Warning Panel
         style_panel = container_style_panel(role="WARNING", shade="LIGHT")
+        logger.info("Panel style: %s", style_panel)
+        assert style_panel, "Panel style should not be empty"
+        assert "PANEL" in style_panel, "Panel style should contain PANEL"
         frame3 = ttk.Frame(main, style=style_panel)
-        frame3.grid(row=2, column=0, sticky="nsew", padx=10, pady=10)
-        ttk.Label(frame3, text="Warning Panel (solid border)").pack(padx=10, pady=10)
+        frame3.grid(row=2, column=0, sticky="nsew", padx=SPACING_SM, pady=SPACING_SM)
+        ttk.Label(frame3, text="Warning Panel (solid border)").pack(padx=SPACING_SM, pady=SPACING_SM)
 
         # Success Section
         style_section = container_style_section(role="SUCCESS", shade="LIGHT")
+        logger.info("Section style: %s", style_section)
+        assert style_section, "Section style should not be empty"
+        assert "SECTION" in style_section, "Section style should contain SECTION"
         frame4 = ttk.Frame(main, style=style_section)
-        frame4.grid(row=3, column=0, sticky="nsew", padx=10, pady=10)
-        ttk.Label(frame4, text="Success Section (flat)").pack(padx=10, pady=10)
+        frame4.grid(row=3, column=0, sticky="nsew", padx=SPACING_SM, pady=SPACING_SM)
+        ttk.Label(frame4, text="Success Section (flat)").pack(padx=SPACING_SM, pady=SPACING_SM)
 
-        # Direct bg override example (uses bg_colour/bg_shade)
+        # Direct bg override example
         direct_style = resolve_container_style(
             kind="CARD",
             border="THIN",
@@ -777,15 +551,62 @@ if __name__ == "__main__":
             bg_colour=GUI_PRIMARY,
             bg_shade="MID",
         )
+        logger.info("Direct bg override style: %s", direct_style)
+        assert "PRIMARY" in direct_style, "Direct style should contain PRIMARY"
         frame5 = ttk.Frame(main, style=direct_style)
-        frame5.grid(row=4, column=0, sticky="nsew", padx=10, pady=10)
+        frame5.grid(row=4, column=0, sticky="nsew", padx=SPACING_SM, pady=SPACING_SM)
         ttk.Label(frame5, text="Direct bg override (GUI_PRIMARY[MID])").pack(
-            padx=10, pady=10
+            padx=SPACING_SM, pady=SPACING_SM
+        )
+
+        # String preset example
+        preset_style = resolve_container_style(
+            kind="CARD",
+            border="THIN",
+            padding="MD",
+            relief="raised",
+            bg_colour="PRIMARY",
+            bg_shade="LIGHT",
+        )
+        logger.info("String preset style: %s", preset_style)
+        assert "PRIMARY" in preset_style, "Preset style should contain PRIMARY"
+        frame6 = ttk.Frame(main, style=preset_style)
+        frame6.grid(row=5, column=0, sticky="nsew", padx=SPACING_SM, pady=SPACING_SM)
+        ttk.Label(frame6, text="String preset (bg_colour='PRIMARY')").pack(
+            padx=SPACING_SM, pady=SPACING_SM
+        )
+
+        # String preset with default shade
+        preset_default_style = resolve_container_style(
+            kind="PANEL",
+            border="MEDIUM",
+            padding="SM",
+            relief="solid",
+            bg_colour="SUCCESS",
+        )
+        logger.info("String preset with default shade: %s", preset_default_style)
+        assert "SUCCESS" in preset_default_style, "Preset default should contain SUCCESS"
+        frame7 = ttk.Frame(main, style=preset_default_style)
+        frame7.grid(row=6, column=0, sticky="nsew", padx=SPACING_SM, pady=SPACING_SM)
+        ttk.Label(frame7, text="String preset with default shade").pack(
+            padx=SPACING_SM, pady=SPACING_SM
         )
 
         # Cache info
-        logger.info("Cache info: %s", get_container_style_cache_info())
+        cache_info = get_container_style_cache_info()
+        logger.info("Cache info: %s", cache_info)
+        cache_count = cache_info["count"]
+        assert isinstance(cache_count, int) and cache_count >= 7, (
+            f"Expected at least 7 cached styles, got {cache_count}"
+        )
 
+        # Test clear_container_style_cache
+        clear_container_style_cache()
+        cache_info_after = get_container_style_cache_info()
+        assert cache_info_after["count"] == 0, "Cache should be empty after clear"
+        logger.info("clear_container_style_cache() works correctly")
+
+        logger.info("[G01d] All assertions passed. Visual frames created; entering mainloop...")
         root.mainloop()
 
     except Exception as exc:

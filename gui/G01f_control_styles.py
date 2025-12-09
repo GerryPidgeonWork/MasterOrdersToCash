@@ -1,5 +1,5 @@
 # ====================================================================================================
-# G01f_control_styles.py
+# G01f_control_styles.py                                                                 [v1.0.0]
 # ----------------------------------------------------------------------------------------------------
 # Control style resolver for buttons, checkboxes, radios, and switches.
 #
@@ -21,26 +21,15 @@
 #     the same style name.
 #   - No raw hex values: ALL colours come from G01a tokens.
 #
-# State behaviour (per T03 Section 7.6, with parametric overrides):
-#   - Normal:   background = bg_shade_normal (default: MID)
-#   - Hover:    background = bg_shade_hover  (default: DARK)
-#   - Active:   background = bg_shade_pressed (default: XDARK)
-#   - Disabled: background = bg_shade_normal, foreground = gray
-#   - Focus:    bordercolor = DARK shade of border family (or explicit family)
-#
-# Style naming pattern (via build_style_cache_key in G01b), e.g.:
-#   Control_BUTTON_variant_PRIMARY_fg_TEXT_DARK_bg_PRIMARY_norm_MID_hover_DARK_press_XDARK
-#       _bd_PRIMARY_DARK_bw_THIN_pad_SM_relief_RAISED
-#
-#   WIDGETTYPE values:
-#       BUTTON, CHECKBOX, RADIO, SWITCH
-#   VARIANT values:
-#       PRIMARY, SECONDARY, SUCCESS, WARNING, ERROR
+# Colour API:
+#   - fg_colour: TextColourType (BLACK, WHITE, GREY, PRIMARY, SECONDARY, SUCCESS, ERROR, WARNING)
+#   - bg_colour: ColourFamilyName (PRIMARY, SECONDARY, SUCCESS, WARNING, ERROR)
+#   - bg_shade_*: ShadeType (LIGHT, MID, DARK, XDARK)
 #
 # ----------------------------------------------------------------------------------------------------
 # Author:       Gerry Pidgeon
-# Created:      2025-12-02
-# Project:      GUI Framework v1.0
+# Created:      2025-12-12
+# Project:      SimpleTk v1.0
 # ====================================================================================================
 
 
@@ -96,82 +85,32 @@ from gui.G00a_gui_packages import tk, ttk, init_gui_theme, is_gui_theme_initiali
 # Shared utilities, type aliases, and design tokens from G01b (single source of truth)
 from gui.G01b_style_base import (
     # Type aliases
-    ShadeType,
-    TextShadeType,
-    ColourFamily,
-    BorderWeightType,
-    SpacingType,
-    ControlWidgetType,
-    ControlVariantType,
+    ShadeType, TextColourType, ColourFamily, BorderWeightType, SpacingType, ControlWidgetType, ControlVariantType,
     # Utilities
-    BORDER_WEIGHTS,
-    SPACING_SCALE,
-    build_style_cache_key,
-    detect_colour_family_name,
-    resolve_text_font,
+    BORDER_WEIGHTS, SPACING_SCALE, SPACING_XS, SPACING_SM, SPACING_MD, SPACING_LG, SPACING_XL, SPACING_XXL,
+    build_style_cache_key, detect_colour_family_name, resolve_text_font, resolve_colour, get_default_shade,
     # Design tokens (re-exported from G01a)
-    GUI_PRIMARY,
-    GUI_SECONDARY,
-    GUI_SUCCESS,
-    GUI_WARNING,
-    GUI_ERROR,
-    GUI_TEXT,
-    # Additional tokens for G01f
-    TEXT_COLOUR_GREY,
-    TEXT_COLOUR_WHITE,
-    CONTROL_INDICATOR_GAP,
+    GUI_PRIMARY, GUI_SECONDARY, GUI_SUCCESS, GUI_WARNING, GUI_ERROR, TEXT_COLOURS
 )
 
 
 # ====================================================================================================
-# 4. CONTROL STYLE CACHE
+# 3. CONTROL STYLE CACHE
 # ----------------------------------------------------------------------------------------------------
 # A dedicated cache for storing all resolved ttk control style names.
-#
-# Purpose:
-#   - Ensure idempotent behaviour: repeated calls with identical parameters
-#     return the same style name.
-#   - Prevent duplicate ttk.Style registrations.
-#   - Act as the single source of truth for created control styles.
 # ====================================================================================================
+
 CONTROL_STYLE_CACHE: dict[str, str] = {}
 
 
 # ====================================================================================================
-# 4b. WINDOWS THEME INITIALISATION
+# 4. WINDOWS THEME INITIALISATION
 # ----------------------------------------------------------------------------------------------------
-# On Windows 11 (and other Windows versions), the native "vista" and "winnative"
-# themes render ttk.Button using OS-native controls that ignore the `background`
-# property. This means custom button colours are discarded.
-#
-# Solution:
-#   - Call init_gui_theme() from G00a which switches to the "clam" theme.
-#   - This is called automatically when resolving control styles.
-#
-# Notes:
-#   - The "clam" theme is cross-platform and provides consistent behaviour.
-#   - For best results, call init_gui_theme() immediately after creating
-#     the Tk root window, BEFORE any styles are registered.
+# On Windows 11, native themes ignore button background. Solution: use "clam" theme.
 # ====================================================================================================
+
 def ensure_button_theme_initialised() -> None:
-    """
-    Description:
-        Ensure the ttk theme is configured to honour button background colours.
-        Delegates to init_gui_theme() from G00a.
-
-    Args:
-        None.
-
-    Returns:
-        None.
-
-    Raises:
-        None.
-
-    Notes:
-        - Called automatically when resolving control styles.
-        - For best results, call init_gui_theme() at application startup.
-    """
+    """Ensure ttk theme honours button backgrounds. Delegates to init_gui_theme()."""
     if not is_gui_theme_initialised():
         init_gui_theme()
 
@@ -180,15 +119,6 @@ def ensure_button_theme_initialised() -> None:
 # 5. INTERNAL HELPERS
 # ----------------------------------------------------------------------------------------------------
 # Pure internal utilities supporting control-style resolution.
-#
-# Purpose:
-#   - Provide semantic helpers (variant → colour family, base layout lookup).
-#   - Perform name construction via build_control_style_name().
-#   - Resolve padding / border tokens.
-#   - DO NOT create ttk styles or modify global state.
-#
-# Notes:
-#   - detect_colour_family_name() is imported from G01b (single source of truth).
 # ====================================================================================================
 
 # Semantic mapping of variants → colour families
@@ -200,15 +130,17 @@ CONTROL_VARIANT_MAP: dict[str, ColourFamily] = {
     "ERROR": GUI_ERROR,
 }
 
-# Disabled state foreground colour (from G01a)
-DISABLED_FG_HEX = TEXT_COLOUR_GREY
+# Disabled state foreground colour (neutral grey)
+DISABLED_FG_HEX = TEXT_COLOURS["GREY"]
+
+# Indicator background (white for unchecked state)
+INDICATOR_BG_HEX = TEXT_COLOURS["WHITE"]
 
 
 def build_control_style_name(
     widget_type: str,
     variant_name: str,
-    fg_family_name: str,
-    fg_shade: str,
+    fg_colour: str,
     bg_family_name: str,
     bg_shade_normal: str,
     bg_shade_hover: str,
@@ -221,54 +153,36 @@ def build_control_style_name(
 ) -> str:
     """
     Description:
-        Construct the canonical style name for control widgets using the shared
-        build_style_cache_key helper from G01b.
+        Construct the canonical style name for control widgets.
 
     Args:
-        widget_type:
-            Logical widget type token ("BUTTON", "CHECKBOX", "RADIO", "SWITCH").
-        variant_name:
-            Semantic variant token ("PRIMARY", "SUCCESS", etc.).
-        fg_family_name:
-            Foreground colour family name (e.g., "TEXT").
-        fg_shade:
-            Foreground shade token (e.g., "DARK").
-        bg_family_name:
-            Background colour family name (e.g., "PRIMARY").
-        bg_shade_normal:
-            Background shade token used for the normal state.
-        bg_shade_hover:
-            Background shade token used for the hover/active state.
-        bg_shade_pressed:
-            Background shade token used for the pressed state.
-        border_family_name:
-            Border colour family name.
-        border_shade:
-            Border shade token.
-        border_weight_token:
-            Border weight token ("NONE", "THIN", "MEDIUM", "THICK").
-        padding_token:
-            Padding token ("NONE", "XS", "SM", "MD", "LG", "XL", "XXL").
-        relief_token:
-            Relief token for visual elevation ("FLAT", "RAISED", etc.).
+        widget_type: Logical widget type token (BUTTON, CHECKBOX, RADIO, SWITCH).
+        variant_name: Semantic variant token (PRIMARY, SUCCESS, etc.).
+        fg_colour: Foreground text colour token (e.g., BLACK, WHITE).
+        bg_family_name: Background colour family name (e.g., PRIMARY).
+        bg_shade_normal: Background shade token for normal state.
+        bg_shade_hover: Background shade token for hover state.
+        bg_shade_pressed: Background shade token for pressed state.
+        border_family_name: Border colour family name.
+        border_shade: Border shade token.
+        border_weight_token: Border weight token (NONE, THIN, MEDIUM, THICK).
+        padding_token: Padding token (NONE, XS, SM, MD, LG, XL, XXL).
+        relief_token: Relief token (FLAT, RAISED, etc.).
 
     Returns:
-        str:
-            Deterministic, human-readable style name.
+        str: Deterministic, human-readable style name.
 
     Raises:
         None.
 
     Notes:
-        - Uses build_style_cache_key from G01b for consistency.
-        - Order of segments is stable to maximise cache hits.
+        Uses build_style_cache_key from G01b for consistency.
     """
     return build_style_cache_key(
         "Control",
         widget_type.upper(),
         f"variant_{variant_name.upper()}",
-        f"fg_{fg_family_name}",
-        fg_shade.upper(),
+        f"fg_{fg_colour.upper()}",
         f"bg_{bg_family_name}",
         f"norm_{bg_shade_normal.upper()}",
         f"hover_{bg_shade_hover.upper()}",
@@ -287,19 +201,16 @@ def get_variant_base_family(variant_name: str) -> ColourFamily:
         Resolve the base colour family for a given variant token.
 
     Args:
-        variant_name:
-            Variant token ("PRIMARY", "SECONDARY", "SUCCESS", "WARNING", "ERROR").
+        variant_name: Variant token (PRIMARY, SECONDARY, SUCCESS, WARNING, ERROR).
 
     Returns:
-        ColourFamily:
-            The corresponding colour family dictionary.
+        ColourFamily: The corresponding colour family dictionary.
 
     Raises:
-        KeyError:
-            If variant_name is not registered in CONTROL_VARIANT_MAP.
+        KeyError: If variant_name is not registered in CONTROL_VARIANT_MAP.
 
     Notes:
-        - All families originate from G01a_style_config.
+        All families originate from G01a_style_config.
     """
     key = variant_name.upper()
     if key not in CONTROL_VARIANT_MAP:
@@ -313,22 +224,19 @@ def get_variant_base_family(variant_name: str) -> ColourFamily:
 def get_base_layout_name(widget_type: str) -> str:
     """
     Description:
-        Return the base ttk layout name appropriate for the given widget type.
+        Return the base ttk layout name for the given widget type.
 
     Args:
-        widget_type:
-            "BUTTON", "CHECKBOX", "RADIO", "SWITCH".
+        widget_type: BUTTON, CHECKBOX, RADIO, or SWITCH.
 
     Returns:
-        str:
-            Base ttk style name whose layout will be cloned.
+        str: Base ttk style name whose layout will be cloned.
 
     Raises:
-        ValueError:
-            If widget_type is not one of the recognised tokens.
+        ValueError: If widget_type is not recognised.
 
     Notes:
-        - Switches share the Checkbutton layout.
+        Switches share the Checkbutton layout.
     """
     widget_key = widget_type.upper()
 
@@ -353,19 +261,16 @@ def resolve_border_width_internal(border_weight: BorderWeightType | None) -> int
         Convert a BorderWeightType token into a numeric pixel border width.
 
     Args:
-        border_weight:
-            Border weight token or None.
+        border_weight: Border weight token or None.
 
     Returns:
-        int:
-            Pixel width (0 for NONE or None).
+        int: Pixel width (0 for NONE or None).
 
     Raises:
-        KeyError:
-            If border_weight is not a valid BORDER_WEIGHTS key.
+        KeyError: If border_weight is not a valid BORDER_WEIGHTS key.
 
     Notes:
-        - Returns 0 for None or "NONE".
+        Returns 0 for None or "NONE".
     """
     if border_weight is None:
         return 0
@@ -383,28 +288,28 @@ def resolve_border_width_internal(border_weight: BorderWeightType | None) -> int
     return BORDER_WEIGHTS[token]
 
 
-def resolve_padding_internal(padding: SpacingType | None) -> tuple[int, int]:
+def resolve_padding_internal(padding: SpacingType | tuple[int, int] | None) -> tuple[int, int]:
     """
     Description:
-        Resolve a spacing token into symmetric (pad_x, pad_y) pixel values.
+        Resolve a spacing token or tuple into (pad_x, pad_y) pixel values.
 
     Args:
-        padding:
-            Spacing token (XS, SM, MD, LG, XL, XXL) or None.
+        padding: Spacing token, tuple (pad_x, pad_y), or None.
 
     Returns:
-        tuple[int, int]:
-            Symmetric padding values (pad_x, pad_y).
+        tuple[int, int]: Padding values (pad_x, pad_y).
 
     Raises:
-        KeyError:
-            If padding is not a valid SPACING_SCALE key.
+        KeyError: If padding is not a valid SPACING_SCALE key (when string).
 
     Notes:
-        - Returns (0, 0) for None.
+        Returns (0, 0) for None. Tuples are returned directly.
     """
     if padding is None:
         return (0, 0)
+
+    if isinstance(padding, tuple):
+        return padding
 
     token = str(padding).upper()
     if token not in SPACING_SCALE:
@@ -421,115 +326,50 @@ def resolve_padding_internal(padding: SpacingType | None) -> tuple[int, int]:
 # 6. CONTROL STYLE RESOLUTION (PUBLIC API – CORE ENGINE)
 # ----------------------------------------------------------------------------------------------------
 # The main control-style resolver: resolve_control_style().
-#
-# Purpose:
-#   - Convert high-level semantic parameters (widget type, variant) and
-#     explicit overrides (fg/bg/border/padding/relief) into concrete ttk
-#     control styles.
-#   - Apply deterministic naming and idempotent caching.
-#   - Register styles with ttk.Style(), including colours, padding, borders
-#     and comprehensive state mappings per T03 Section 7.6.
-#
-# Notes:
-#   - This is the ONLY place that creates ttk styles for interactive controls.
-#   - All concrete styling work lives here (background, foreground, padding).
-#   - Semantic parameters provide defaults; explicit parameters always win.
 # ====================================================================================================
+
 def resolve_control_style(
     widget_type: ControlWidgetType = "BUTTON",
     variant: ControlVariantType = "PRIMARY",
-    fg_colour: ColourFamily | None = None,
-    fg_shade: ShadeType | TextShadeType = "BLACK",
-    bg_colour: ColourFamily | None = None,
+    fg_colour: TextColourType = "BLACK",
+    bg_colour: str | ColourFamily | None = None,
     bg_shade_normal: ShadeType | None = None,
     bg_shade_hover: ShadeType | None = None,
     bg_shade_pressed: ShadeType | None = None,
-    border_colour: ColourFamily | None = None,
+    border_colour: str | ColourFamily | None = None,
     border_shade: ShadeType | None = None,
     border_weight: BorderWeightType | None = "THIN",
-    padding: SpacingType | None = "SM",
+    padding: SpacingType | tuple[int, int] | None = "SM",
     relief: str | None = None,
 ) -> str:
     """
     Description:
         Resolve a control style (Buttons, Checkbuttons, Radiobuttons, Switches)
-        with full parametric control. Styles are created lazily and cached using
-        a deterministic, semantic name.
+        with full parametric control.
 
     Args:
-        widget_type:
-            Logical widget type token. One of:
-                - "BUTTON"
-                - "CHECKBOX"
-                - "RADIO"
-                - "SWITCH"
-            Defaults to "BUTTON".
-        variant:
-            Semantic role / colour variant. One of:
-                - "PRIMARY"
-                - "SECONDARY"
-                - "SUCCESS"
-                - "WARNING"
-                - "ERROR"
-            Defaults to "PRIMARY".
-        fg_colour:
-            Foreground (text/icon) colour family. Defaults to GUI_TEXT.
-        fg_shade:
-            Shade within the foreground family. For TEXT family:
-                "BLACK", "WHITE", "DARK", "LIGHT".
-            For status/brand families:
-                "LIGHT", "MID", "DARK", "XDARK".
-            Defaults to "DARK".
-        bg_colour:
-            Background colour family for the control face. Defaults to the
-            family implied by `variant` (PRIMARY, SECONDARY, etc.).
-        bg_shade_normal:
-            Shade used for the normal background state. Defaults to "MID".
-        bg_shade_hover:
-            Shade used for hover/active background state. Defaults to "DARK".
-        bg_shade_pressed:
-            Shade used for the pressed background state. Defaults to "XDARK"
-            or "DARK" if XDARK is not present.
-        border_colour:
-            Border colour family. Defaults to bg_colour.
-        border_shade:
-            Shade within the border family. Defaults to "DARK" where available,
-            otherwise falls back to bg_shade_normal.
-        border_weight:
-            Border weight token. One of:
-                "NONE", "THIN", "MEDIUM", "THICK" or None.
-            Defaults to "THIN".
-        padding:
-            Internal padding token. One of:
-                "XS", "SM", "MD", "LG", "XL", "XXL" or None.
-            Defaults to "SM".
-        relief:
-            Tcl/Tk relief style. Common values:
-                "flat", "raised", "sunken", "solid", "ridge", "groove".
-            If None, defaults to:
-                - "raised" for BUTTON
-                - "flat"   for CHECKBOX/RADIO/SWITCH
+        widget_type: Logical widget type (BUTTON, CHECKBOX, RADIO, SWITCH).
+        variant: Semantic colour variant (PRIMARY, SECONDARY, SUCCESS, etc.).
+        fg_colour: Foreground text colour (BLACK, WHITE, GREY, PRIMARY, etc.).
+        bg_colour: Background colour preset or family dict. Defaults to variant.
+        bg_shade_normal: Shade for normal state. Defaults to MID.
+        bg_shade_hover: Shade for hover state. Defaults to DARK.
+        bg_shade_pressed: Shade for pressed state. Defaults to XDARK.
+        border_colour: Border colour preset or family dict. Defaults to bg_colour.
+        border_shade: Shade within border family. Defaults to DARK.
+        border_weight: Border weight token (NONE, THIN, MEDIUM, THICK) or None.
+        padding: Padding token, tuple (pad_x, pad_y), or None.
+        relief: Tcl/Tk relief style. Defaults to raised for buttons, flat otherwise.
 
     Returns:
-        str:
-            The ttk style name to use on ttk controls, for example:
-                ttk.Button(parent, text="OK", style=style_name)
+        str: The registered ttk style name for use on controls.
 
     Raises:
-        KeyError:
-            If any shade token is invalid for its colour family or if padding /
-            border_weight is invalid.
-        ValueError:
-            If widget_type or variant are unsupported.
+        KeyError: If shade tokens are invalid for their colour families.
+        ValueError: If widget_type or variant are unsupported.
 
     Notes:
-        - State behaviour per T03 Section 7.6:
-            * Normal: bg_shade_normal
-            * Hover (active): bg_shade_hover
-            * Pressed: bg_shade_pressed
-            * Disabled: bg_shade_normal, DISABLED_FG_HEX
-        - Semantic parameters (`variant`) provide defaults only; explicit
-          fg/bg/border overrides always win.
+        State behaviour: Normal→MID, Hover→DARK, Pressed→XDARK, Disabled→greyed.
     """
     # Ensure theme supports button backgrounds (Windows fix)
     ensure_button_theme_initialised()
@@ -540,14 +380,13 @@ def resolve_control_style(
             "INPUT → widget_type=%s, variant=%s", widget_type, variant
         )
         logger.debug(
-            "INPUT → fg=%s/%s, bg=%s/(%s,%s,%s), border=%s/%s, weight=%s, pad=%s, relief=%s",
-            detect_colour_family_name(fg_colour),
-            fg_shade,
-            detect_colour_family_name(bg_colour),
+            "INPUT → fg=%s, bg=%s/(%s,%s,%s), border=%s/%s, weight=%s, pad=%s, relief=%s",
+            fg_colour,
+            bg_colour,
             bg_shade_normal,
             bg_shade_hover,
             bg_shade_pressed,
-            detect_colour_family_name(border_colour),
+            border_colour,
             border_shade,
             border_weight,
             padding,
@@ -564,31 +403,48 @@ def resolve_control_style(
             "Expected one of: BUTTON, CHECKBOX, RADIO, SWITCH."
         )
 
-    # Base background family from variant if not explicitly set
-    if bg_colour is None:
-        bg_colour = get_variant_base_family(variant_key)
+    # ------------------------------------------------------------------------------------------------
+    # Step 1: Resolve foreground colour
+    # ------------------------------------------------------------------------------------------------
+    fg_colour_upper = fg_colour.upper()
 
-    # Foreground defaults to GUI_TEXT
-    if fg_colour is None:
-        fg_colour = GUI_TEXT
+    if fg_colour_upper not in TEXT_COLOURS:
+        raise KeyError(
+            f"[G01f] Invalid fg_colour '{fg_colour}'. "
+            f"Valid options: {list(TEXT_COLOURS.keys())}"
+        )
+
+    fg_hex = TEXT_COLOURS[fg_colour_upper]
+
+    # ------------------------------------------------------------------------------------------------
+    # Step 2: Resolve background colour family
+    # ------------------------------------------------------------------------------------------------
+    bg_colour_resolved = resolve_colour(bg_colour)
+    border_colour_resolved = resolve_colour(border_colour)
+
+    # Base background family from variant if not explicitly set
+    if bg_colour_resolved is None:
+        bg_colour_resolved = get_variant_base_family(variant_key)
 
     # Border defaults to background family
-    if border_colour is None:
-        border_colour = bg_colour
+    if border_colour_resolved is None:
+        border_colour_resolved = bg_colour_resolved
 
-    # Normalise shade tokens to uppercase before validation
-    fg_shade_normalised: str = fg_shade.upper()
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug(
+            "RESOLVED → fg=%s, bg=%s, border=%s",
+            fg_colour_upper,
+            detect_colour_family_name(bg_colour_resolved),
+            detect_colour_family_name(border_colour_resolved),
+        )
+
+    # ------------------------------------------------------------------------------------------------
+    # Step 3: Resolve background shades
+    # ------------------------------------------------------------------------------------------------
     bg_shade_normal_normalised: str | None = bg_shade_normal.upper() if bg_shade_normal is not None else None
     bg_shade_hover_normalised: str | None = bg_shade_hover.upper() if bg_shade_hover is not None else None
     bg_shade_pressed_normalised: str | None = bg_shade_pressed.upper() if bg_shade_pressed is not None else None
     border_shade_normalised: str | None = border_shade.upper() if border_shade is not None else None
-
-    # Validate shades for each family
-    if fg_shade_normalised not in fg_colour:
-        raise KeyError(
-            f"[G01f] Invalid fg_shade '{fg_shade_normalised}'. "
-            f"Available: {list(fg_colour.keys())}"
-        )
 
     # Default background shades (if not explicitly supplied)
     if bg_shade_normal_normalised is None:
@@ -597,9 +453,9 @@ def resolve_control_style(
         bg_shade_hover_normalised = "DARK"
     if bg_shade_pressed_normalised is None:
         # Prefer XDARK, fall back to DARK, then MID
-        if "XDARK" in bg_colour:
+        if "XDARK" in bg_colour_resolved:
             bg_shade_pressed_normalised = "XDARK"
-        elif "DARK" in bg_colour:
+        elif "DARK" in bg_colour_resolved:
             bg_shade_pressed_normalised = "DARK"
         else:
             bg_shade_pressed_normalised = "MID"
@@ -609,58 +465,63 @@ def resolve_control_style(
         (bg_shade_hover_normalised, "bg_shade_hover"),
         (bg_shade_pressed_normalised, "bg_shade_pressed"),
     ]:
-        if shade_token not in bg_colour:
+        if shade_token not in bg_colour_resolved:
             raise KeyError(
                 f"[G01f] Invalid {label} '{shade_token}'. "
-                f"Available for bg_colour: {list(bg_colour.keys())}"
+                f"Available for bg_colour: {list(bg_colour_resolved.keys())}"
             )
 
     # Border shade default
     if border_shade_normalised is None:
-        if "DARK" in border_colour:
+        if "DARK" in border_colour_resolved:
             border_shade_normalised = "DARK"
         else:
             border_shade_normalised = bg_shade_normal_normalised
 
-    if border_shade_normalised not in border_colour:
+    if border_shade_normalised not in border_colour_resolved:
         raise KeyError(
             f"[G01f] Invalid border_shade '{border_shade_normalised}'. "
-            f"Available: {list(border_colour.keys())}"
+            f"Available: {list(border_colour_resolved.keys())}"
         )
 
-    # Border width + tokens
+    # ------------------------------------------------------------------------------------------------
+    # Step 4: Border width + padding
+    # ------------------------------------------------------------------------------------------------
     border_width = resolve_border_width_internal(border_weight)
     border_weight_token = "NONE" if border_width == 0 else str(border_weight).upper()
 
-    # Padding resolution
     pad_x, pad_y = resolve_padding_internal(padding)
-    padding_token = "NONE" if padding is None else str(padding).upper()
+    if padding is None:
+        padding_token = "NONE"
+    elif isinstance(padding, tuple):
+        padding_token = f"{pad_x}x{pad_y}"
+    else:
+        padding_token = str(padding).upper()
 
     # Relief resolution
     if relief is None:
-        # Sensible defaults per control type
         relief_token = "raised" if widget_key == "BUTTON" and border_width > 0 else "flat"
     else:
         relief_token = relief
 
-    # Resolve hex colours
-    fg_hex = fg_colour[fg_shade_normalised]
-    bg_hex_normal = bg_colour[bg_shade_normal_normalised]
-    bg_hex_hover = bg_colour[bg_shade_hover_normalised]
-    bg_hex_pressed = bg_colour[bg_shade_pressed_normalised]
-    border_hex = border_colour[border_shade_normalised]
+    # ------------------------------------------------------------------------------------------------
+    # Step 5: Resolve hex colours
+    # ------------------------------------------------------------------------------------------------
+    bg_hex_normal = bg_colour_resolved[bg_shade_normal_normalised]
+    bg_hex_hover = bg_colour_resolved[bg_shade_hover_normalised]
+    bg_hex_pressed = bg_colour_resolved[bg_shade_pressed_normalised]
+    border_hex = border_colour_resolved[border_shade_normalised]
 
-    # Foreground family names
-    fg_family_name = detect_colour_family_name(fg_colour)
-    bg_family_name = detect_colour_family_name(bg_colour)
-    border_family_name = detect_colour_family_name(border_colour)
+    bg_family_name = detect_colour_family_name(bg_colour_resolved)
+    border_family_name = detect_colour_family_name(border_colour_resolved)
 
-    # Build deterministic style name
+    # ------------------------------------------------------------------------------------------------
+    # Step 6: Build deterministic style name
+    # ------------------------------------------------------------------------------------------------
     style_name = build_control_style_name(
         widget_type=widget_key,
         variant_name=variant_key,
-        fg_family_name=fg_family_name,
-        fg_shade=fg_shade_normalised,
+        fg_colour=fg_colour_upper,
         bg_family_name=bg_family_name,
         bg_shade_normal=bg_shade_normal_normalised,
         bg_shade_hover=bg_shade_hover_normalised,
@@ -682,6 +543,9 @@ def resolve_control_style(
             logger.debug("———[G01f DEBUG END]—————————————————————————————")
         return CONTROL_STYLE_CACHE[style_name]
 
+    # ------------------------------------------------------------------------------------------------
+    # Step 7: Create ttk style
+    # ------------------------------------------------------------------------------------------------
     style = ttk.Style()
 
     # Clone base layout for this control type
@@ -704,7 +568,6 @@ def resolve_control_style(
             )
 
     # Configure normal state
-    # Resolve font for buttons (BODY size, not bold for standard buttons)
     button_font = resolve_text_font(size="BODY", bold=False)
 
     configure_kwargs: dict[str, Any] = {
@@ -721,20 +584,19 @@ def resolve_control_style(
     # For checkbuttons and radiobuttons, set indicator colours and spacing
     if widget_key in ("CHECKBOX", "RADIO", "SWITCH"):
         configure_kwargs["indicatorcolor"] = bg_hex_normal
-        configure_kwargs["indicatorbackground"] = TEXT_COLOUR_WHITE
-        # Add margin around indicator (left, top, right, bottom) - right margin creates gap to text
-        configure_kwargs["indicatormargin"] = (0, 0, CONTROL_INDICATOR_GAP, 0)
+        configure_kwargs["indicatorbackground"] = INDICATOR_BG_HEX
+        configure_kwargs["indicatormargin"] = (0, 0, SPACING_SM, 0)
 
     style.configure(style_name, **configure_kwargs)
 
-    # State mappings per T03 Section 7.6
-    focus_border_hex = border_colour.get("XDARK", border_colour.get("DARK", border_hex))
+    # State mappings
+    focus_border_hex = border_colour_resolved.get("XDARK", border_colour_resolved.get("DARK", border_hex))
 
     map_kwargs: dict[str, list] = {
         "background": [
-            ("pressed", bg_hex_pressed),     # Active/pressed state
-            ("active", bg_hex_hover),        # Hover state
-            ("disabled", bg_hex_normal),     # Disabled keeps normal bg
+            ("pressed", bg_hex_pressed),
+            ("active", bg_hex_hover),
+            ("disabled", bg_hex_normal),
         ],
         "foreground": [
             ("disabled", DISABLED_FG_HEX),
@@ -746,11 +608,10 @@ def resolve_control_style(
         ],
     }
 
-    # For checkbuttons and radiobuttons, map indicator colours for states
     if widget_key in ("CHECKBOX", "RADIO", "SWITCH"):
         map_kwargs["indicatorcolor"] = [
-            ("selected", bg_hex_normal),      # When checked, use variant colour
-            ("!selected", TEXT_COLOUR_WHITE), # When unchecked, white
+            ("selected", bg_hex_normal),
+            ("!selected", INDICATOR_BG_HEX),
             ("disabled", DISABLED_FG_HEX),
         ]
 
@@ -773,247 +634,63 @@ def resolve_control_style(
 
 
 # ====================================================================================================
-# 7. CONVENIENCE HELPERS (SEMANTIC CONTROL ROLES)
+# 7. CONVENIENCE HELPERS
 # ----------------------------------------------------------------------------------------------------
-# Simple wrappers around resolve_control_style() that provide commonly used
-# semantic presets (primary/secondary buttons, status controls, etc.).
-#
-# Purpose:
-#   - Reduce boilerplate when creating frequently-used control styles.
-#   - Keep component construction clean.
-#
-# Notes:
-#   - All helpers must defer to resolve_control_style() internally.
-#   - No direct ttk.Style manipulation belongs here.
+# Simple forwarders to resolve_control_style() with semantic presets.
 # ====================================================================================================
+
 def control_button_primary() -> str:
-    """
-    Description:
-        Primary button style for main actions.
-
-    Args:
-        None.
-
-    Returns:
-        str:
-            Registered ttk style name.
-
-    Raises:
-        None.
-
-    Notes:
-        - Uses PRIMARY variant with white text for contrast on blue background.
-    """
-    return resolve_control_style(widget_type="BUTTON", variant="PRIMARY", fg_shade="WHITE")
+    """Return primary button style (white text on blue). Forwards to resolve_control_style()."""
+    return resolve_control_style(widget_type="BUTTON", variant="PRIMARY", fg_colour="WHITE")
 
 
 def control_button_secondary() -> str:
-    """
-    Description:
-        Secondary button style for auxiliary actions.
-
-    Args:
-        None.
-
-    Returns:
-        str:
-            Registered ttk style name.
-
-    Raises:
-        None.
-
-    Notes:
-        - Uses SECONDARY variant.
-    """
-    return resolve_control_style(widget_type="BUTTON", variant="SECONDARY")
+    """Return secondary button style (black text). Forwards to resolve_control_style()."""
+    return resolve_control_style(widget_type="BUTTON", variant="SECONDARY", fg_colour="BLACK")
 
 
 def control_button_success() -> str:
-    """
-    Description:
-        Success button style for positive confirmations.
-
-    Args:
-        None.
-
-    Returns:
-        str:
-            Registered ttk style name.
-
-    Raises:
-        None.
-
-    Notes:
-        - Uses SUCCESS variant with white text for contrast on green background.
-    """
-    return resolve_control_style(widget_type="BUTTON", variant="SUCCESS", fg_shade="WHITE")
+    """Return success button style (white text on green). Forwards to resolve_control_style()."""
+    return resolve_control_style(widget_type="BUTTON", variant="SUCCESS", fg_colour="WHITE")
 
 
 def control_button_warning() -> str:
-    """
-    Description:
-        Warning button style for cautionary actions.
-
-    Args:
-        None.
-
-    Returns:
-        str:
-            Registered ttk style name.
-
-    Raises:
-        None.
-
-    Notes:
-        - Uses WARNING variant.
-    """
-    return resolve_control_style(widget_type="BUTTON", variant="WARNING")
+    """Return warning button style (black text on yellow). Forwards to resolve_control_style()."""
+    return resolve_control_style(widget_type="BUTTON", variant="WARNING", fg_colour="BLACK")
 
 
 def control_button_error() -> str:
-    """
-    Description:
-        Error button style for destructive actions.
-
-    Args:
-        None.
-
-    Returns:
-        str:
-            Registered ttk style name.
-
-    Raises:
-        None.
-
-    Notes:
-        - Uses ERROR (ERROR) variant with white text for contrast on red background.
-    """
-    return resolve_control_style(widget_type="BUTTON", variant="ERROR", fg_shade="WHITE")
+    """Return error button style (white text on red). Forwards to resolve_control_style()."""
+    return resolve_control_style(widget_type="BUTTON", variant="ERROR", fg_colour="WHITE")
 
 
 def control_checkbox_primary() -> str:
-    """
-    Description:
-        Primary checkbox style.
-
-    Args:
-        None.
-
-    Returns:
-        str:
-            Registered ttk style name.
-
-    Raises:
-        None.
-
-    Notes:
-        - Uses PRIMARY variant.
-    """
+    """Return primary checkbox style. Forwards to resolve_control_style()."""
     return resolve_control_style(widget_type="CHECKBOX", variant="PRIMARY")
 
 
 def control_checkbox_success() -> str:
-    """
-    Description:
-        Success checkbox style for positive selections.
-
-    Args:
-        None.
-
-    Returns:
-        str:
-            Registered ttk style name.
-
-    Raises:
-        None.
-
-    Notes:
-        - Uses SUCCESS variant.
-    """
+    """Return success checkbox style. Forwards to resolve_control_style()."""
     return resolve_control_style(widget_type="CHECKBOX", variant="SUCCESS")
 
 
 def control_radio_primary() -> str:
-    """
-    Description:
-        Primary radio button style.
-
-    Args:
-        None.
-
-    Returns:
-        str:
-            Registered ttk style name.
-
-    Raises:
-        None.
-
-    Notes:
-        - Uses PRIMARY variant.
-    """
+    """Return primary radio button style. Forwards to resolve_control_style()."""
     return resolve_control_style(widget_type="RADIO", variant="PRIMARY")
 
 
 def control_radio_warning() -> str:
-    """
-    Description:
-        Warning radio button style.
-
-    Args:
-        None.
-
-    Returns:
-        str:
-            Registered ttk style name.
-
-    Raises:
-        None.
-
-    Notes:
-        - Uses WARNING variant.
-    """
+    """Return warning radio button style. Forwards to resolve_control_style()."""
     return resolve_control_style(widget_type="RADIO", variant="WARNING")
 
 
 def control_switch_primary() -> str:
-    """
-    Description:
-        Primary switch/toggle style.
-
-    Args:
-        None.
-
-    Returns:
-        str:
-            Registered ttk style name.
-
-    Raises:
-        None.
-
-    Notes:
-        - Uses PRIMARY variant (Checkbutton layout).
-    """
+    """Return primary switch/toggle style. Forwards to resolve_control_style()."""
     return resolve_control_style(widget_type="SWITCH", variant="PRIMARY")
 
 
 def control_switch_error() -> str:
-    """
-    Description:
-        Error switch/toggle style for critical toggles.
-
-    Args:
-        None.
-
-    Returns:
-        str:
-            Registered ttk style name.
-
-    Raises:
-        None.
-
-    Notes:
-        - Uses ERROR variant.
-    """
+    """Return error switch/toggle style. Forwards to resolve_control_style()."""
     return resolve_control_style(widget_type="SWITCH", variant="ERROR")
 
 
@@ -1021,31 +698,10 @@ def control_switch_error() -> str:
 # 8. CACHE INTROSPECTION
 # ----------------------------------------------------------------------------------------------------
 # Diagnostic functions for inspecting and managing the control style cache.
-#
-# Purpose:
-#   - Enable runtime cache inspection for debugging.
-#   - Support cache clearing for theme switching or testing.
 # ====================================================================================================
+
 def get_control_style_cache_info() -> dict[str, int | list[str]]:
-    """
-    Description:
-        Return diagnostic information about the control-style cache.
-
-    Args:
-        None.
-
-    Returns:
-        dict[str, int | list[str]]:
-            Dictionary containing:
-            - "count": Number of cached styles.
-            - "keys": List of all cached style names.
-
-    Raises:
-        None.
-
-    Notes:
-        - Useful for debugging and verifying cache behaviour.
-    """
+    """Return diagnostic info about the control style cache (count and keys)."""
     return {
         "count": len(CONTROL_STYLE_CACHE),
         "keys": list(CONTROL_STYLE_CACHE.keys()),
@@ -1053,46 +709,13 @@ def get_control_style_cache_info() -> dict[str, int | list[str]]:
 
 
 def clear_control_style_cache() -> None:
-    """
-    Description:
-        Clear all entries from the control-style cache.
-
-    Args:
-        None.
-
-    Returns:
-        None.
-
-    Raises:
-        None.
-
-    Notes:
-        - Use for theme switching or testing.
-        - Does NOT unregister styles from ttk.Style().
-    """
+    """Clear all entries from the control style cache. Does NOT unregister styles from ttk."""
     CONTROL_STYLE_CACHE.clear()
     logger.info("[G01f] Cleared control style cache")
 
 
 def debug_dump_button_styles() -> None:
-    """
-    Description:
-        Log detailed diagnostic information about all registered button styles.
-        Useful for verifying that background colours are correctly configured.
-
-    Args:
-        None.
-
-    Returns:
-        None.
-
-    Raises:
-        None.
-
-    Notes:
-        - Outputs to logger at INFO level for visibility.
-        - Shows theme, style names, and configured properties.
-    """
+    """Log detailed diagnostic info about all registered button styles."""
     style = ttk.Style()
     current_theme = style.theme_use()
 
@@ -1118,7 +741,6 @@ def debug_dump_button_styles() -> None:
                 logger.info("  borderwidth: %s", bd)
                 logger.info("  relief: %s", relief)
 
-                # Show state mappings
                 bg_map = style.map(style_name, "background")
                 if bg_map:
                     logger.info("  background map: %s", bg_map)
@@ -1131,15 +753,7 @@ def debug_dump_button_styles() -> None:
 # ====================================================================================================
 # 9. PUBLIC API
 # ----------------------------------------------------------------------------------------------------
-# Expose the main control-style resolver along with convenience helpers.
-#
-# Purpose:
-#   - Define the module's public interface via __all__.
-#   - Ensure IDE auto-completion and clean external imports.
-#
-# Notes:
-#   - Only stable, externally-safe functions should be exported.
-# ====================================================================================================
+
 __all__ = [
     # Main engine
     "resolve_control_style",
@@ -1168,16 +782,7 @@ __all__ = [
 # ====================================================================================================
 # 10. SELF-TEST
 # ----------------------------------------------------------------------------------------------------
-# Minimal manual smoke test for the control-style engine.
-#
-# Purpose:
-#   - Validate ttk style creation in an isolated environment.
-#   - Provide quick visual confirmation of button/checkbox/radio rendering.
-#
-# Notes:
-#   - Not executed during normal imports.
-#   - Wraps all behaviour in try/except/finally with proper logging.
-# ====================================================================================================
+
 if __name__ == "__main__":
     init_logging()
     logger.info("[G01f] Running G01f_control_styles self-test...")
@@ -1186,71 +791,177 @@ if __name__ == "__main__":
     root.title("G01f Control Styles — Self-test")
 
     try:
-        frame = ttk.Frame(root, padding=SPACING_SCALE["MD"])
+        frame = ttk.Frame(root, padding=SPACING_MD)
         frame.grid(row=0, column=0, sticky="nsew")
         root.grid_rowconfigure(0, weight=1)
         root.grid_columnconfigure(0, weight=1)
 
-        # Buttons
-        ttk.Label(frame, text="Buttons:").grid(row=0, column=0, sticky="w", pady=(0, 5))
+        # ---- Buttons ----
+        ttk.Label(frame, text="Buttons:").grid(row=0, column=0, sticky="w", pady=(0, SPACING_XS))
 
-        btn_primary = ttk.Button(frame, text="Primary", style=control_button_primary())
-        btn_secondary = ttk.Button(frame, text="Secondary", style=control_button_secondary())
-        btn_success = ttk.Button(frame, text="Success", style=control_button_success())
-        btn_warning = ttk.Button(frame, text="Warning", style=control_button_warning())
-        btn_error = ttk.Button(frame, text="Error", style=control_button_error())
+        style_btn_primary = control_button_primary()
+        logger.info("Primary button style: %s", style_btn_primary)
+        assert style_btn_primary, "Primary button style should not be empty"
+        assert "BUTTON" in style_btn_primary, "Button style should contain BUTTON"
 
-        btn_primary.grid(row=1, column=0, sticky="w", pady=SPACING_SCALE["XS"])
-        btn_secondary.grid(row=2, column=0, sticky="w", pady=SPACING_SCALE["XS"])
-        btn_success.grid(row=3, column=0, sticky="w", pady=SPACING_SCALE["XS"])
-        btn_warning.grid(row=4, column=0, sticky="w", pady=SPACING_SCALE["XS"])
-        btn_error.grid(row=5, column=0, sticky="w", pady=SPACING_SCALE["XS"])
+        style_btn_secondary = control_button_secondary()
+        logger.info("Secondary button style: %s", style_btn_secondary)
+        assert style_btn_secondary, "Secondary button style should not be empty"
 
-        # Checkboxes
-        ttk.Label(frame, text="Checkboxes:").grid(row=6, column=0, sticky="w", pady=(15, 5))
+        style_btn_success = control_button_success()
+        logger.info("Success button style: %s", style_btn_success)
+        assert style_btn_success, "Success button style should not be empty"
+
+        style_btn_warning = control_button_warning()
+        logger.info("Warning button style: %s", style_btn_warning)
+        assert style_btn_warning, "Warning button style should not be empty"
+
+        style_btn_error = control_button_error()
+        logger.info("Error button style: %s", style_btn_error)
+        assert style_btn_error, "Error button style should not be empty"
+
+        btn_primary = ttk.Button(frame, text="Primary", style=style_btn_primary)
+        btn_secondary = ttk.Button(frame, text="Secondary", style=style_btn_secondary)
+        btn_success = ttk.Button(frame, text="Success", style=style_btn_success)
+        btn_warning = ttk.Button(frame, text="Warning", style=style_btn_warning)
+        btn_error = ttk.Button(frame, text="Error", style=style_btn_error)
+
+        btn_primary.grid(row=1, column=0, sticky="w", pady=SPACING_XS)
+        btn_secondary.grid(row=2, column=0, sticky="w", pady=SPACING_XS)
+        btn_success.grid(row=3, column=0, sticky="w", pady=SPACING_XS)
+        btn_warning.grid(row=4, column=0, sticky="w", pady=SPACING_XS)
+        btn_error.grid(row=5, column=0, sticky="w", pady=SPACING_XS)
+
+        # ---- Checkboxes ----
+        ttk.Label(frame, text="Checkboxes:").grid(row=6, column=0, sticky="w", pady=(SPACING_MD, SPACING_XS))
+
+        style_chk_primary = control_checkbox_primary()
+        logger.info("Primary checkbox style: %s", style_chk_primary)
+        assert style_chk_primary, "Primary checkbox style should not be empty"
+        assert "CHECKBOX" in style_chk_primary, "Checkbox style should contain CHECKBOX"
+
+        style_chk_success = control_checkbox_success()
+        logger.info("Success checkbox style: %s", style_chk_success)
+        assert style_chk_success, "Success checkbox style should not be empty"
 
         chk_primary_var = tk.BooleanVar(value=True)
         chk_primary = ttk.Checkbutton(
             frame,
             text="Primary checkbox",
-            style=control_checkbox_primary(),
+            style=style_chk_primary,
             variable=chk_primary_var,
         )
-        chk_primary.grid(row=7, column=0, sticky="w", pady=SPACING_SCALE["XS"])
+        chk_primary.grid(row=7, column=0, sticky="w", pady=SPACING_XS)
 
         chk_success_var = tk.BooleanVar(value=False)
         chk_success = ttk.Checkbutton(
             frame,
             text="Success checkbox",
-            style=control_checkbox_success(),
+            style=style_chk_success,
             variable=chk_success_var,
         )
-        chk_success.grid(row=8, column=0, sticky="w", pady=SPACING_SCALE["XS"])
+        chk_success.grid(row=8, column=0, sticky="w", pady=SPACING_XS)
 
-        # Radio buttons
-        ttk.Label(frame, text="Radio buttons:").grid(row=9, column=0, sticky="w", pady=(15, 5))
+        # ---- Radio buttons ----
+        ttk.Label(frame, text="Radio buttons:").grid(row=9, column=0, sticky="w", pady=(SPACING_MD, SPACING_XS))
+
+        style_radio_primary = control_radio_primary()
+        logger.info("Primary radio style: %s", style_radio_primary)
+        assert style_radio_primary, "Primary radio style should not be empty"
+        assert "RADIO" in style_radio_primary, "Radio style should contain RADIO"
+
+        style_radio_warning = control_radio_warning()
+        logger.info("Warning radio style: %s", style_radio_warning)
+        assert style_radio_warning, "Warning radio style should not be empty"
 
         radio_var = tk.StringVar(value="primary")
         radio_primary = ttk.Radiobutton(
             frame,
             text="Primary radio",
-            style=control_radio_primary(),
+            style=style_radio_primary,
             value="primary",
             variable=radio_var,
         )
         radio_warning = ttk.Radiobutton(
             frame,
             text="Warning radio",
-            style=control_radio_warning(),
+            style=style_radio_warning,
             value="warning",
             variable=radio_var,
         )
-        radio_primary.grid(row=10, column=0, sticky="w", pady=SPACING_SCALE["XS"])
-        radio_warning.grid(row=11, column=0, sticky="w", pady=SPACING_SCALE["XS"])
+        radio_primary.grid(row=10, column=0, sticky="w", pady=SPACING_XS)
+        radio_warning.grid(row=11, column=0, sticky="w", pady=SPACING_XS)
 
-        # Cache info
-        logger.info("Cache info: %s", get_control_style_cache_info())
+        # ---- Switches ----
+        ttk.Label(frame, text="Switches:").grid(row=12, column=0, sticky="w", pady=(SPACING_MD, SPACING_XS))
 
+        style_switch_primary = control_switch_primary()
+        logger.info("Primary switch style: %s", style_switch_primary)
+        assert style_switch_primary, "Primary switch style should not be empty"
+        assert "SWITCH" in style_switch_primary, "Switch style should contain SWITCH"
+
+        style_switch_error = control_switch_error()
+        logger.info("Error switch style: %s", style_switch_error)
+        assert style_switch_error, "Error switch style should not be empty"
+
+        switch_primary_var = tk.BooleanVar(value=True)
+        switch_primary = ttk.Checkbutton(
+            frame,
+            text="Primary switch",
+            style=style_switch_primary,
+            variable=switch_primary_var,
+        )
+        switch_primary.grid(row=13, column=0, sticky="w", pady=SPACING_XS)
+
+        switch_error_var = tk.BooleanVar(value=False)
+        switch_error = ttk.Checkbutton(
+            frame,
+            text="Error switch",
+            style=style_switch_error,
+            variable=switch_error_var,
+        )
+        switch_error.grid(row=14, column=0, sticky="w", pady=SPACING_XS)
+
+        # ---- fg_colour tests ----
+        ttk.Label(frame, text="fg_colour tests:").grid(row=15, column=0, sticky="w", pady=(SPACING_MD, SPACING_XS))
+
+        style_grey_text = resolve_control_style(
+            widget_type="BUTTON",
+            variant="SECONDARY",
+            fg_colour="GREY",
+        )
+        logger.info("Grey text style: %s", style_grey_text)
+        assert "fg_GREY" in style_grey_text, "Style should contain fg_GREY"
+        btn_grey = ttk.Button(frame, text="Grey text button", style=style_grey_text)
+        btn_grey.grid(row=16, column=0, sticky="w", pady=SPACING_XS)
+
+        mixed_style = resolve_control_style(
+            widget_type="BUTTON",
+            variant="SECONDARY",
+            fg_colour="ERROR",
+            bg_colour="WARNING",
+            border_colour="ERROR",
+        )
+        logger.info("Mixed preset style: %s", mixed_style)
+        assert "WARNING" in mixed_style, "Mixed style should contain WARNING"
+        btn_mixed = ttk.Button(frame, text="Mixed (ERROR text, WARNING bg)", style=mixed_style)
+        btn_mixed.grid(row=17, column=0, sticky="w", pady=SPACING_XS)
+
+        # ---- Cache info ----
+        cache_info = get_control_style_cache_info()
+        logger.info("Cache info: %s", cache_info)
+        cache_count = cache_info["count"]
+        assert isinstance(cache_count, int) and cache_count >= 13, (
+            f"Expected at least 13 cached styles, got {cache_count}"
+        )
+
+        # Test clear_control_style_cache
+        clear_control_style_cache()
+        cache_info_after = get_control_style_cache_info()
+        assert cache_info_after["count"] == 0, "Cache should be empty after clear"
+        logger.info("clear_control_style_cache() works correctly")
+
+        logger.info("[G01f] All assertions passed. Visual widgets created; entering mainloop...")
         root.mainloop()
 
     except Exception as exc:

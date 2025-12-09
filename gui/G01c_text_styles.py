@@ -1,11 +1,11 @@
 # ====================================================================================================
-# G01c_text_styles.py
+# G01c_text_styles.py                                                                    [v1.0.0]
 # ----------------------------------------------------------------------------------------------------
 # Text style resolver for ttk.Label and other text-based widgets.
 #
 # Purpose:
 #   - Provide a parametric, cached text-style engine for the GUI framework.
-#   - Turn high-level semantic parameters (family, shade, size, weight)
+#   - Turn high-level semantic parameters (fg_colour, bg_colour, bg_shade, size, weight)
 #     into concrete ttk styles.
 #   - Keep ALL text/label styling logic in one place.
 #
@@ -21,20 +21,15 @@
 #     the same style name.
 #   - No raw hex values: ALL colours come from G01a tokens.
 #
-# Style naming pattern (via build_style_cache_key in G01b):
-#   Text_fg_<FAMILY>_<SHADE>_bg_<FAMILY|NONE>_<SHADE|NONE>_font_<SIZE>_[FLAGS]
-#
-#   FAMILY values:
-#       PRIMARY, SECONDARY, SUCCESS, WARNING, ERROR, TEXT, CUSTOM, NONE
-#   SHADE values:
-#       LIGHT, MID, DARK, XDARK (or BLACK/WHITE/GREY/PRIMARY/SECONDARY for TEXT family)
-#   FLAGS:
-#       B, U, I (in any combination), omitted when no flags are set.
+# Colour API:
+#   - fg_colour: TextColourType (BLACK, WHITE, GREY, PRIMARY, SECONDARY, SUCCESS, ERROR, WARNING)
+#   - bg_colour: ColourFamilyName (PRIMARY, SECONDARY, SUCCESS, WARNING, ERROR)
+#   - bg_shade: ShadeType (LIGHT, MID, DARK, XDARK)
 #
 # ----------------------------------------------------------------------------------------------------
 # Author:       Gerry Pidgeon
-# Created:      2025-12-02
-# Project:      GUI Framework v1.0
+# Created:      2025-12-12
+# Project:      SimpleTk v1.0
 # ====================================================================================================
 
 
@@ -91,54 +86,42 @@ from gui.G00a_gui_packages import tk, ttk
 from gui.G01b_style_base import (
     # Type aliases
     ShadeType,
-    TextShadeType,
+    TextColourType,
     SizeType,
     ColourFamily,
+    ColourFamilyName,
     # Utilities
     SPACING_SCALE,
+    SPACING_SM,
+    SPACING_LG,
     resolve_text_font,
     build_style_cache_key,
     detect_colour_family_name,
+    resolve_colour,
+    get_default_shade,
     # Design tokens (re-exported from G01a)
-    GUI_PRIMARY,
-    GUI_SECONDARY,
-    GUI_SUCCESS,
-    GUI_WARNING,
-    GUI_ERROR,
-    GUI_TEXT,
+    TEXT_COLOURS,
+    COLOUR_FAMILIES,
 )
 
 
 # ====================================================================================================
-# 4. TEXT STYLE CACHE
+# 3. TEXT STYLE CACHE
 # ----------------------------------------------------------------------------------------------------
 # A dedicated cache for storing all resolved ttk text style names.
-#
-# Purpose:
-#   - Ensure idempotent behaviour: repeated calls with identical parameters
-#     return the same style name.
-#   - Prevent duplicate ttk.Style registrations.
-#   - Act as the single source of truth for created text styles.
 # ====================================================================================================
+
 TEXT_STYLE_CACHE: dict[str, str] = {}
 
 
 # ====================================================================================================
-# 5. INTERNAL HELPERS
+# 4. INTERNAL HELPERS
 # ----------------------------------------------------------------------------------------------------
 # Pure internal utilities supporting text-style resolution.
-#
-# Purpose:
-#   - Perform name construction via build_text_style_name().
-#   - DO NOT create ttk styles or modify global state.
-#
-# Notes:
-#   - detect_colour_family_name() is now imported from G01b (single source of truth).
 # ====================================================================================================
 
 def build_text_style_name(
-    fg_family_name: str,
-    fg_shade: str,
+    fg_colour: str,
     bg_family_name: str,
     bg_shade: str,
     size_token: str,
@@ -152,35 +135,24 @@ def build_text_style_name(
         build_style_cache_key helper from G01b.
 
     Args:
-        fg_family_name:
-            Foreground colour family name (e.g., "PRIMARY", "TEXT").
-        fg_shade:
-            Foreground shade token (e.g., "MID" for brand families, "BLACK" for TEXT).
-        bg_family_name:
-            Background colour family name or "NONE".
-        bg_shade:
-            Background shade token or "NONE".
-        size_token:
-            Font size token (DISPLAY, HEADING, TITLE, BODY, SMALL).
-        bold:
-            Whether the style is bold.
-        underline:
-            Whether the style is underlined.
-        italic:
-            Whether the style is italic.
+        fg_colour: Foreground colour name (e.g., "BLACK", "PRIMARY", "ERROR").
+        bg_family_name: Background colour family name or "NONE".
+        bg_shade: Background shade token or "NONE".
+        size_token: Font size token (DISPLAY, HEADING, TITLE, BODY, SMALL).
+        bold: Whether the style is bold.
+        underline: Whether the style is underlined.
+        italic: Whether the style is italic.
 
     Returns:
-        str:
-            Deterministic, human-readable style name.
+        str: Deterministic, human-readable style name.
 
     Raises:
         None.
 
     Notes:
-        - Flags are encoded as a compact suffix (B, I, U), omitted if no flags.
-        - Order is always B, I, U for consistency.
+        Flags are encoded as a compact suffix (B, I, U), omitted if no flags.
     """
-    fg_shade = fg_shade.upper()
+    fg_colour = fg_colour.upper()
     bg_shade = bg_shade.upper()
     size_token = size_token.upper()
 
@@ -194,10 +166,8 @@ def build_text_style_name(
 
     segments: list[str] = [
         "Text",
-        f"fg_{fg_family_name}",
-        fg_shade,
-        f"bg_{bg_family_name}",
-        bg_shade,
+        f"fg_{fg_colour}",
+        f"bg_{bg_family_name}_{bg_shade}",
         f"font_{size_token}",
     ]
 
@@ -208,24 +178,14 @@ def build_text_style_name(
 
 
 # ====================================================================================================
-# 6. TEXT STYLE RESOLUTION (PUBLIC API – CORE ENGINE)
+# 5. TEXT STYLE RESOLUTION (PUBLIC API – CORE ENGINE)
 # ----------------------------------------------------------------------------------------------------
 # The main text-style resolver: resolve_text_style().
-#
-# Purpose:
-#   - Convert high-level semantic parameters (family, shade, size, weight)
-#     into concrete ttk text styles.
-#   - Apply deterministic naming and idempotent caching.
-#   - Register styles with ttk.Style(), including font selection and layout binding.
-#
-# Notes:
-#   - This is the ONLY place that creates ttk styles for text/label widgets.
-#   - All concrete styling work lives here (foreground, background, font, padding).
 # ====================================================================================================
+
 def resolve_text_style(
-    fg_colour: ColourFamily | None = None,
-    fg_shade: ShadeType | TextShadeType = "BLACK",
-    bg_colour: ColourFamily | None = None,
+    fg_colour: TextColourType = "BLACK",
+    bg_colour: str | ColourFamily | None = None,
     bg_shade: ShadeType | None = None,
     size: SizeType = "BODY",
     bold: bool = False,
@@ -238,108 +198,80 @@ def resolve_text_style(
         Styles are created lazily and cached by a deterministic, semantic key.
 
     Args:
-        fg_colour:
-            Foreground colour family dictionary. Expected values are one of:
-            GUI_PRIMARY, GUI_SECONDARY, GUI_SUCCESS, GUI_WARNING, GUI_ERROR, GUI_TEXT.
-            If None, defaults to GUI_TEXT for neutral, readable text.
-        fg_shade:
-            Shade token within the foreground family.
-            For PRIMARY/SECONDARY/STATUS: "LIGHT", "MID", "DARK", "XDARK".
-            For TEXT: "BLACK", "WHITE", "GREY", "PRIMARY", "SECONDARY".
-            Defaults to "BLACK".
-        bg_colour:
-            Background colour family dictionary. If None, background is inherited
-            from the parent widget (no explicit background forced).
-        bg_shade:
-            Shade token for the background family. Must be provided if bg_colour
-            is provided. Must be None if bg_colour is None.
-        size:
-            Font size token: "DISPLAY", "HEADING", "TITLE", "BODY", "SMALL".
-            Defaults to "BODY".
-        bold:
-            Whether the font weight is bold.
-        underline:
-            Whether the text is underlined.
-        italic:
-            Whether the text is italic.
+        fg_colour: Foreground text colour (BLACK, WHITE, GREY, PRIMARY, SECONDARY,
+            SUCCESS, ERROR, WARNING). Defaults to "BLACK".
+        bg_colour: Background colour preset string or colour family dict.
+            If None, background is inherited from the parent widget.
+        bg_shade: Shade token for background (LIGHT, MID, DARK, XDARK).
+            If None and bg_colour is provided, defaults to MID.
+        size: Font size token (DISPLAY, HEADING, TITLE, BODY, SMALL).
+        bold: Whether the font weight is bold.
+        underline: Whether the text is underlined.
+        italic: Whether the text is italic.
 
     Returns:
-        str:
-            The registered ttk style name. This can be used directly:
-                ttk.Label(parent, text="Hello", style=style_name)
+        str: The registered ttk style name for use with ttk.Label etc.
 
     Raises:
-        KeyError:
-            If fg_shade or bg_shade are not valid keys for their respective
-            colour families.
-        ValueError:
-            If bg_shade is provided while bg_colour is None, or vice versa.
+        KeyError: If fg_colour is not valid, or bg_shade is not valid for the family.
 
     Notes:
-        - Default body text uses GUI_TEXT["BLACK"] for neutral, readable text.
-        - Use fg_colour=GUI_PRIMARY explicitly when brand-coloured text is desired.
-        - Background inheritance (bg_colour=None) is recommended for most labels.
-        - Font resolution is delegated to resolve_text_font() in G01b.
+        Font resolution is delegated to resolve_text_font() in G01b.
     """
+    # ------------------------------------------------------------------------------------------------
+    # Step 1: Resolve foreground colour
+    # ------------------------------------------------------------------------------------------------
+    fg_colour_upper = fg_colour.upper()
+    
+    if fg_colour_upper not in TEXT_COLOURS:
+        raise KeyError(
+            f"[G01c] Invalid fg_colour '{fg_colour}'. "
+            f"Valid options: {list(TEXT_COLOURS.keys())}"
+        )
+    
+    fg_hex = TEXT_COLOURS[fg_colour_upper]
+
     if logger.isEnabledFor(logging.DEBUG):
         logger.debug("———[G01c DEBUG START]———————————————————————————")
-        logger.debug("INPUT → fg_colour: %s, fg_shade: %s", 
-                     detect_colour_family_name(fg_colour), fg_shade)
-        logger.debug("INPUT → bg_colour: %s, bg_shade: %s",
-                     detect_colour_family_name(bg_colour), bg_shade)
-        logger.debug("INPUT → size: %s, bold/underline/italic: %s/%s/%s",
-                     size, bold, underline, italic)
+        logger.debug("INPUT → fg_colour: %s → %s", fg_colour_upper, fg_hex)
 
-    # Default: GUI_TEXT for neutral readable text (per T04 spec)
-    if fg_colour is None:
-        fg_colour = GUI_TEXT
+    # ------------------------------------------------------------------------------------------------
+    # Step 2: Resolve background colour
+    # ------------------------------------------------------------------------------------------------
+    bg_colour_resolved = resolve_colour(bg_colour)
 
-    # Validate bg_colour/bg_shade consistency
-    if bg_colour is None and bg_shade is not None:
-        raise ValueError(
-            "[G01c] bg_shade must be None when bg_colour is None. "
-            "Specify a background colour family if you want explicit background."
-        )
+    if bg_colour_resolved is not None and bg_shade is None:
+        bg_shade = cast(ShadeType, get_default_shade(bg_colour_resolved))
 
-    if bg_colour is not None and bg_shade is None:
-        raise ValueError(
-            "[G01c] bg_shade must be provided when bg_colour is provided."
-        )
-
-    # Normalise shade tokens to uppercase before validation
-    fg_shade_normalised: str = fg_shade.upper()
     bg_shade_normalised: str | None = bg_shade.upper() if bg_shade is not None else None
 
-    # Validate and resolve foreground hex
-    if fg_shade_normalised not in fg_colour:
-        raise KeyError(
-            f"[G01c] Invalid fg_shade '{fg_shade_normalised}' for this colour family. "
-            f"Available shades: {list(fg_colour.keys())}"
-        )
-    fg_hex = fg_colour[fg_shade_normalised]
-
     # Validate and resolve background hex
-    if bg_colour is not None and bg_shade_normalised is not None:
-        if bg_shade_normalised not in bg_colour:
+    if bg_colour_resolved is not None and bg_shade_normalised is not None:
+        if bg_shade_normalised not in bg_colour_resolved:
             raise KeyError(
                 f"[G01c] Invalid bg_shade '{bg_shade_normalised}' for this colour family. "
-                f"Available shades: {list(bg_colour.keys())}"
+                f"Available shades: {list(bg_colour_resolved.keys())}"
             )
-        bg_hex = bg_colour[bg_shade_normalised]
+        bg_hex = bg_colour_resolved[bg_shade_normalised]
     else:
         bg_hex = None
 
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug("INPUT → bg_colour: %s, bg_shade: %s",
+                     detect_colour_family_name(bg_colour_resolved), bg_shade_normalised)
+        logger.debug("INPUT → size: %s, bold/underline/italic: %s/%s/%s",
+                     size, bold, underline, italic)
+
     size_token = size.upper()
 
-    # Determine semantic family names for key-building
-    fg_family_name = detect_colour_family_name(fg_colour)
-    bg_family_name = detect_colour_family_name(bg_colour)
+    # ------------------------------------------------------------------------------------------------
+    # Step 3: Build style name and check cache
+    # ------------------------------------------------------------------------------------------------
+    bg_family_name = detect_colour_family_name(bg_colour_resolved)
     bg_shade_label = bg_shade_normalised if bg_shade_normalised is not None else "NONE"
 
-    # Build deterministic style name
     style_name = build_text_style_name(
-        fg_family_name=fg_family_name,
-        fg_shade=fg_shade_normalised,
+        fg_colour=fg_colour_upper,
         bg_family_name=bg_family_name,
         bg_shade=bg_shade_label,
         size_token=size_token,
@@ -358,7 +290,9 @@ def resolve_text_style(
             logger.debug("———[G01c DEBUG END]—————————————————————————————")
         return TEXT_STYLE_CACHE[style_name]
 
-    # Resolve Tk font via G01b
+    # ------------------------------------------------------------------------------------------------
+    # Step 4: Create ttk style
+    # ------------------------------------------------------------------------------------------------
     font_key = resolve_text_font(
         size=size_token,
         bold=bold,
@@ -366,7 +300,6 @@ def resolve_text_style(
         italic=italic,
     )
 
-    # Create ttk style
     style = ttk.Style()
 
     # Base spacing from spacing scale
@@ -403,275 +336,49 @@ def resolve_text_style(
 
 
 # ====================================================================================================
-# 7. CONVENIENCE HELPERS
+# 6. CONVENIENCE HELPERS
 # ----------------------------------------------------------------------------------------------------
-# Simple wrappers around resolve_text_style() that provide commonly used
-# semantic presets (error text, success text, headings, small captions, etc.).
-#
-# Purpose:
-#   - Reduce boilerplate when creating frequently-used text styles.
-#   - Keep component construction clean.
-#
-# Notes:
-#   - All helpers must defer to resolve_text_style() internally.
-#   - No caching or style creation logic belongs here.
+# Simple forwarders to resolve_text_style() with semantic presets.
 # ====================================================================================================
-def text_style_error(
-    shade: ShadeType = "DARK",
-    bold: bool = False,
-    size: SizeType = "BODY",
-) -> str:
-    """
-    Description:
-        Convenience wrapper for error text styles using GUI_ERROR.
 
-    Args:
-        shade:
-            Shade within GUI_ERROR. Defaults to "DARK".
-        bold:
-            Whether to render the text in bold.
-        size:
-            Font size token. Defaults to "BODY".
-
-    Returns:
-        str:
-            Registered ttk style name.
-
-    Raises:
-        KeyError:
-            If shade is invalid for GUI_ERROR.
-
-    Notes:
-        - Background is inherited.
-    """
-    return resolve_text_style(
-        fg_colour=GUI_ERROR,
-        fg_shade=shade,
-        size=size,
-        bold=bold,
-    )
+def text_style_error(bold: bool = False, size: SizeType = "BODY") -> str:
+    """Return error text style (red). Forwards to resolve_text_style()."""
+    return resolve_text_style(fg_colour="ERROR", size=size, bold=bold)
 
 
-def text_style_success(
-    shade: ShadeType = "DARK",
-    bold: bool = False,
-    size: SizeType = "BODY",
-) -> str:
-    """
-    Description:
-        Convenience wrapper for success text styles using GUI_SUCCESS.
-
-    Args:
-        shade:
-            Shade within GUI_SUCCESS. Defaults to "DARK".
-        bold:
-            Whether to render the text in bold.
-        size:
-            Font size token. Defaults to "BODY".
-
-    Returns:
-        str:
-            Registered ttk style name.
-
-    Raises:
-        KeyError:
-            If shade is invalid for GUI_SUCCESS.
-
-    Notes:
-        - Background is inherited.
-    """
-    return resolve_text_style(
-        fg_colour=GUI_SUCCESS,
-        fg_shade=shade,
-        size=size,
-        bold=bold,
-    )
+def text_style_success(bold: bool = False, size: SizeType = "BODY") -> str:
+    """Return success text style (green). Forwards to resolve_text_style()."""
+    return resolve_text_style(fg_colour="SUCCESS", size=size, bold=bold)
 
 
-def text_style_warning(
-    shade: ShadeType = "DARK",
-    bold: bool = False,
-    size: SizeType = "BODY",
-) -> str:
-    """
-    Description:
-        Convenience wrapper for warning text styles using GUI_WARNING.
-
-    Args:
-        shade:
-            Shade within GUI_WARNING. Defaults to "DARK".
-        bold:
-            Whether to render the text in bold.
-        size:
-            Font size token. Defaults to "BODY".
-
-    Returns:
-        str:
-            Registered ttk style name.
-
-    Raises:
-        KeyError:
-            If shade is invalid for GUI_WARNING.
-
-    Notes:
-        - Background is inherited.
-    """
-    return resolve_text_style(
-        fg_colour=GUI_WARNING,
-        fg_shade=shade,
-        size=size,
-        bold=bold,
-    )
+def text_style_warning(bold: bool = False, size: SizeType = "BODY") -> str:
+    """Return warning text style (yellow/amber). Forwards to resolve_text_style()."""
+    return resolve_text_style(fg_colour="WARNING", size=size, bold=bold)
 
 
-def text_style_heading(
-    fg_colour: ColourFamily | None = None,
-    fg_shade: str | None = None,
-    bold: bool = True,
-) -> str:
-    """
-    Description:
-        Convenience wrapper for section headings.
-
-    Args:
-        fg_colour:
-            Foreground family. Defaults to GUI_TEXT for neutral headings.
-        fg_shade:
-            Optional shade override.
-            Defaults to:
-                - "BLACK" for GUI_TEXT
-                - "MID" for brand/status families (PRIMARY, SUCCESS, WARNING, ERROR)
-        bold:
-            Whether to apply bold. Defaults to True.
-
-    Returns:
-        str:
-            Registered ttk style name.
-
-    Raises:
-        KeyError:
-            If fg_shade is invalid for the selected colour family.
-
-    Notes:
-        - Uses HEADING size.
-        - For brand-coloured headings, pass fg_colour=GUI_PRIMARY explicitly.
-    """
-
-    # Determine default shade if not provided
-    if fg_shade is None:
-        if fg_colour is None or fg_colour is GUI_TEXT:
-            fg_shade = "BLACK"
-        else:
-            fg_shade = "MID"
-
-    # Convert to Literal union for clean type checking
-    shade_literal = cast(ShadeType | TextShadeType, fg_shade)
-
-    return resolve_text_style(
-        fg_colour=fg_colour,
-        fg_shade=shade_literal,
-        size="HEADING",
-        bold=bold,
-    )
+def text_style_heading(fg_colour: TextColourType = "BLACK", bold: bool = True) -> str:
+    """Return heading text style (HEADING size). Forwards to resolve_text_style()."""
+    return resolve_text_style(fg_colour=fg_colour, size="HEADING", bold=bold)
 
 
-def text_style_body(
-    fg_colour: ColourFamily | None = None,
-    fg_shade: ShadeType | TextShadeType = "BLACK",
-) -> str:
-    """
-    Description:
-        Convenience wrapper for standard body text.
-
-    Args:
-        fg_colour:
-            Foreground family. Defaults to GUI_TEXT.
-        fg_shade:
-            Shade within the family. Defaults to "BLACK".
-
-    Returns:
-        str:
-            Registered ttk style name.
-
-    Raises:
-        KeyError:
-            If fg_shade is invalid for the colour family.
-
-    Notes:
-        - Uses BODY size.
-        - Normal weight (not bold).
-    """
-    return resolve_text_style(
-        fg_colour=fg_colour,
-        fg_shade=fg_shade,
-        size="BODY",
-        bold=False,
-    )
+def text_style_body(fg_colour: TextColourType = "BLACK") -> str:
+    """Return body text style (BODY size, normal weight). Forwards to resolve_text_style()."""
+    return resolve_text_style(fg_colour=fg_colour, size="BODY", bold=False)
 
 
-def text_style_small(
-    fg_colour: ColourFamily | None = None,
-    fg_shade: ShadeType | TextShadeType = "BLACK",
-) -> str:
-    """
-    Description:
-        Convenience wrapper for small text (captions, hints, meta labels).
-
-    Args:
-        fg_colour:
-            Foreground family. Defaults to GUI_TEXT.
-        fg_shade:
-            Shade within the family. Defaults to "BLACK".
-
-    Returns:
-        str:
-            Registered ttk style name.
-
-    Raises:
-        KeyError:
-            If fg_shade is invalid for the colour family.
-
-    Notes:
-        - Uses SMALL size.
-        - Normal weight (not bold).
-    """
-    return resolve_text_style(
-        fg_colour=fg_colour,
-        fg_shade=fg_shade,
-        size="SMALL",
-        bold=False,
-    )
+def text_style_small(fg_colour: TextColourType = "BLACK") -> str:
+    """Return small text style (SMALL size, for captions). Forwards to resolve_text_style()."""
+    return resolve_text_style(fg_colour=fg_colour, size="SMALL", bold=False)
 
 
 # ====================================================================================================
-# 8. CACHE INTROSPECTION
+# 7. CACHE INTROSPECTION
 # ----------------------------------------------------------------------------------------------------
 # Diagnostic functions for inspecting and managing the text style cache.
-#
-# Purpose:
-#   - Enable runtime cache inspection for debugging.
-#   - Support cache clearing for theme switching or testing.
 # ====================================================================================================
+
 def get_text_style_cache_info() -> dict[str, int | list[str]]:
-    """
-    Description:
-        Return diagnostic information about the text style cache.
-
-    Args:
-        None.
-
-    Returns:
-        dict[str, int | list[str]]:
-            Dictionary containing:
-            - "count": Number of cached styles
-            - "keys": List of all cached style names
-
-    Raises:
-        None.
-
-    Notes:
-        - Useful for debugging and verifying cache behaviour.
-    """
+    """Return diagnostic info about the text style cache (count and keys)."""
     return {
         "count": len(TEXT_STYLE_CACHE),
         "keys": list(TEXT_STYLE_CACHE.keys()),
@@ -679,39 +386,17 @@ def get_text_style_cache_info() -> dict[str, int | list[str]]:
 
 
 def clear_text_style_cache() -> None:
-    """
-    Description:
-        Clear all entries from the text style cache.
-
-    Args:
-        None.
-
-    Returns:
-        None.
-
-    Raises:
-        None.
-
-    Notes:
-        - Use for theme switching or testing.
-        - Does NOT unregister styles from ttk.Style().
-    """
+    """Clear all entries from the text style cache. Does NOT unregister styles from ttk."""
     TEXT_STYLE_CACHE.clear()
     logger.info("[G01c] Cleared text style cache")
 
 
 # ====================================================================================================
-# 9. PUBLIC API
+# 8. PUBLIC API
 # ----------------------------------------------------------------------------------------------------
 # Expose the main text-style resolver along with convenience helpers.
-#
-# Purpose:
-#   - Define the module's public interface via __all__.
-#   - Ensure IDE auto-completion and clean external imports.
-#
-# Notes:
-#   - Only stable, externally-safe functions should be exported.
 # ====================================================================================================
+
 __all__ = [
     # Main engine
     "resolve_text_style",
@@ -729,18 +414,11 @@ __all__ = [
 
 
 # ====================================================================================================
-# 10. SELF-TEST
+# 9. SELF-TEST
 # ----------------------------------------------------------------------------------------------------
 # Minimal manual smoke test for the text-style engine.
-#
-# Purpose:
-#   - Validate ttk style creation in an isolated environment.
-#   - Provide quick visual confirmation of text rendering (body, heading, error).
-#
-# Notes:
-#   - Not executed during normal imports.
-#   - Wraps all behaviour in try/except/finally with proper logging.
 # ====================================================================================================
+
 if __name__ == "__main__":
     init_logging()
     logger.info("[G01c] Running G01c_text_styles self-test...")
@@ -749,35 +427,90 @@ if __name__ == "__main__":
     root.title("G01c Self-test")
 
     try:
-        # Test styles
+        # Test styles with defaults
         style_body = text_style_body()
         logger.info("Body style: %s", style_body)
+        assert style_body, "Body style should not be empty"
 
         style_heading = text_style_heading()
         logger.info("Heading style: %s", style_heading)
+        assert style_heading, "Heading style should not be empty"
 
         style_error = text_style_error()
         logger.info("Error style: %s", style_error)
+        assert style_error, "Error style should not be empty"
 
-        # Visual smoke test — 3 labels
-        lbl1 = ttk.Label(root, text="Body text sample (neutral)", style=style_body)
-        lbl1.pack(padx=20, pady=10)
+        style_success = text_style_success()
+        logger.info("Success style: %s", style_success)
+        assert style_success, "Success style should not be empty"
 
-        lbl2 = ttk.Label(root, text="Heading text sample (neutral bold)", style=style_heading)
-        lbl2.pack(padx=20, pady=10)
+        style_warning = text_style_warning()
+        logger.info("Warning style: %s", style_warning)
+        assert style_warning, "Warning style should not be empty"
+
+        style_small = text_style_small()
+        logger.info("Small style: %s", style_small)
+        assert style_small, "Small style should not be empty"
+
+        # Test fg_colour directly
+        style_primary = resolve_text_style(fg_colour="PRIMARY")
+        logger.info("Primary text style: %s", style_primary)
+        assert "PRIMARY" in style_primary, "Primary style name should contain PRIMARY"
+
+        # Test with background
+        style_with_bg = resolve_text_style(fg_colour="PRIMARY", bg_colour="SECONDARY", bg_shade="LIGHT")
+        logger.info("Primary on Secondary bg: %s", style_with_bg)
+        assert "SECONDARY" in style_with_bg, "Style with bg should contain SECONDARY"
+
+        # Test all fg_colour options
+        for colour_name in ["BLACK", "WHITE", "GREY", "PRIMARY", "SECONDARY", "SUCCESS", "ERROR", "WARNING"]:
+            style = resolve_text_style(fg_colour=colour_name)  # type: ignore[arg-type]
+            logger.info("fg_colour=%s → %s", colour_name, style)
+            assert colour_name in style, f"Style should contain {colour_name}"
+
+        # Test cache info
+        cache_info = get_text_style_cache_info()
+        logger.info("Cache info: %s", cache_info)
+        cache_count = cache_info["count"]
+        assert isinstance(cache_count, int) and cache_count >= 8, (
+            f"Expected at least 8 cached styles, got {cache_count}"
+        )
+
+        # Visual smoke test — labels
+        lbl1 = ttk.Label(root, text="Body text sample (black)", style=style_body)
+        lbl1.pack(padx=SPACING_LG, pady=SPACING_SM)
+
+        lbl2 = ttk.Label(root, text="Heading text sample (black bold)", style=style_heading)
+        lbl2.pack(padx=SPACING_LG, pady=SPACING_SM)
 
         lbl3 = ttk.Label(root, text="Error text sample (red)", style=style_error)
-        lbl3.pack(padx=20, pady=10)
+        lbl3.pack(padx=SPACING_LG, pady=SPACING_SM)
+
+        lbl4 = ttk.Label(root, text="Success text sample (green)", style=style_success)
+        lbl4.pack(padx=SPACING_LG, pady=SPACING_SM)
+
+        lbl5 = ttk.Label(root, text="Warning text sample (yellow)", style=style_warning)
+        lbl5.pack(padx=SPACING_LG, pady=SPACING_SM)
+
+        lbl6 = ttk.Label(root, text="Small text sample (caption)", style=style_small)
+        lbl6.pack(padx=SPACING_LG, pady=SPACING_SM)
 
         # Brand-coloured heading
-        style_brand = text_style_heading(fg_colour=GUI_PRIMARY)
-        lbl4 = ttk.Label(root, text="Brand heading (blue)", style=style_brand)
-        lbl4.pack(padx=20, pady=10)
+        style_brand = text_style_heading(fg_colour="PRIMARY")
+        lbl7 = ttk.Label(root, text="Brand heading (blue)", style=style_brand)
+        lbl7.pack(padx=SPACING_LG, pady=SPACING_SM)
 
-        # Cache info
-        logger.info("Cache info: %s", get_text_style_cache_info())
+        # Primary text on light secondary background
+        lbl8 = ttk.Label(root, text="Primary on Secondary bg", style=style_with_bg)
+        lbl8.pack(padx=SPACING_LG, pady=SPACING_SM)
 
-        logger.info("[G01c] Visual labels created; entering mainloop...")
+        # Test clear_text_style_cache
+        clear_text_style_cache()
+        cache_info_after = get_text_style_cache_info()
+        assert cache_info_after["count"] == 0, "Cache should be empty after clear"
+        logger.info("clear_text_style_cache() works correctly")
+
+        logger.info("[G01c] All assertions passed. Visual labels created; entering mainloop...")
         root.mainloop()
 
     except Exception as exc:

@@ -1,5 +1,5 @@
 # ====================================================================================================
-# G02a_widget_primitives.py
+# G02a_widget_primitives.py                                                              [v1.0.0]
 # ----------------------------------------------------------------------------------------------------
 # Unified widget primitive layer exposing all G01 style resolvers AND widget factories.
 #
@@ -10,24 +10,15 @@
 #   - Add ZERO styling logic (all styling delegated to G01 modules).
 #   - Enable G03 page builders to create widgets through a consistent API.
 #
-# Relationships:
-#   - G01c_text_styles      → text/label style resolution.
-#   - G01d_container_styles → container/frame style resolution.
-#   - G01e_input_styles     → input field style resolution.
-#   - G01f_control_styles   → button/checkbox/radio style resolution.
-#   - G02a_widget_primitives → unified widget API (THIS MODULE).
-#
-# Design principles:
-#   - 1:1 forwarding for style resolvers: every style function maps directly to G01.
-#   - Widget factories: combine ttk widget creation + G01 style in one call.
-#   - No new styling logic, no semantic variants beyond G01.
-#   - DRY by design: avoid duplicate wrapper code.
-#   - Complete coverage: all G01 primitives must be represented.
+# Colour API:
+#   - fg_colour: TextColourType (BLACK, WHITE, GREY, PRIMARY, SECONDARY, SUCCESS, ERROR, WARNING)
+#   - bg_colour: ColourFamilyName (PRIMARY, SECONDARY, SUCCESS, WARNING, ERROR)
+#   - bg_shade: ShadeType (LIGHT, MID, DARK, XDARK)
 #
 # ----------------------------------------------------------------------------------------------------
 # Author:       Gerry Pidgeon
-# Created:      2025-12-03
-# Project:      GUI Framework v1.0
+# Created:      2025-12-12
+# Project:      SimpleTk v1.0
 # ====================================================================================================
 
 
@@ -45,6 +36,7 @@ from __future__ import annotations           # Future-proof type hinting (PEP 56
 # --- Required for dynamic path handling and safe importing of core modules ---------------------------
 import sys                                   # Python interpreter access (path, environment, runtime)
 from pathlib import Path                     # Modern, object-oriented filesystem path handling
+from typing import Literal, get_args         # Type system for Literal types and validation
 
 # --- Ensure project root DOES NOT override site-packages --------------------------------------------
 project_root = str(Path(__file__).resolve().parent.parent)
@@ -80,99 +72,52 @@ logger = get_logger(__name__)
 # --- Additional project-level imports (append below this line only) ----------------------------------
 from gui.G00a_gui_packages import tk, ttk, init_gui_theme
 
-# Spacing tokens from G01a (G02a re-exports these for G03 consumption)
 from gui.G01a_style_config import (
-    GUI_PRIMARY,
-    GUI_SECONDARY,
-    GUI_TEXT,
-    SPACING_XS,
-    SPACING_SM,
-    SPACING_MD,
-    SPACING_LG,
-    SPACING_XL,
-    SPACING_XXL,
+    GUI_PRIMARY, GUI_SECONDARY, TEXT_COLOURS,
+    SPACING_XS, SPACING_SM, SPACING_MD, SPACING_LG, SPACING_XL, SPACING_XXL,
+    GUI_FONT_FAMILY, GUI_FONT_FAMILY_MONO, FONT_SIZES, BORDER_WEIGHTS, BORDER_NONE,
 )
 
-# Type aliases from G01b (G02a re-exports these for G03 consumption)
 from gui.G01b_style_base import (
-    # Core types
-    ShadeType,
-    TextShadeType,
-    SizeType,
-    ColourFamily,
-    BorderWeightType,
-    SpacingType,
-    # Container types (G01d, G03b)
-    ContainerRoleType,
-    ContainerKindType,
-    # Input types (G01e)
-    InputControlType,
-    InputRoleType,
-    # Control types (G01f)
-    ControlWidgetType,
-    ControlVariantType,
+    ShadeType, TextColourType, SizeType, ColourFamily, BorderWeightType, SpacingType,
+    ContainerRoleType, ContainerKindType,
+    InputControlType, InputRoleType,
+    ControlWidgetType, ControlVariantType,
+    resolve_colour, get_default_shade,
+    resolve_text_font,
 )
 
-# Text style resolver from G01c
 from gui.G01c_text_styles import (
-    resolve_text_style,
-    text_style_error,
-    text_style_success,
-    text_style_warning,
-    text_style_heading,
-    text_style_body,
-    text_style_small,
+    resolve_text_style, text_style_error, text_style_success, text_style_warning,
+    text_style_heading, text_style_body, text_style_small
 )
-
-# Container style resolver from G01d
 from gui.G01d_container_styles import (
-    resolve_container_style,
-    container_style_card,
-    container_style_panel,
-    container_style_section,
-    container_style_surface,
+    resolve_container_style, container_style_card, container_style_panel,
+    container_style_section, container_style_surface
 )
-
-# Input style resolver from G01e
 from gui.G01e_input_styles import (
-    resolve_input_style,
-    input_style_entry_default,
-    input_style_entry_error,
-    input_style_entry_success,
-    input_style_combobox_default,
-    input_style_spinbox_default,
+    resolve_input_style, input_style_entry_default, input_style_entry_error,
+    input_style_entry_success, input_style_combobox_default, input_style_spinbox_default
 )
-
-# Control style resolver from G01f
 from gui.G01f_control_styles import (
-    resolve_control_style,
-    control_button_primary,
-    control_button_secondary,
-    control_button_success,
-    control_button_warning,
-    control_button_error,
-    control_checkbox_primary,
-    control_checkbox_success,
-    control_radio_primary,
-    control_radio_warning,
-    control_switch_primary,
-    control_switch_error,
-    debug_dump_button_styles,
+    resolve_control_style, control_button_primary, control_button_secondary,
+    control_button_success, control_button_warning, control_button_error,
+    control_checkbox_primary, control_checkbox_success,
+    control_radio_primary, control_radio_warning,
+    control_switch_primary, control_switch_error,
+    debug_dump_button_styles
 )
 
 
 # ====================================================================================================
 # 3. TEXT STYLE WRAPPERS
-# ----------------------------------------------------------------------------------------------------
-# Thin wrappers for G01c_text_styles — forward all parameters directly.
 # ====================================================================================================
 
 def label_style(
-    fg_colour: ColourFamily | None = None,
-    fg_shade: ShadeType | TextShadeType = "BLACK", # UPDATED: Default from DARK to BLACK
-    bg_colour: ColourFamily | None = None,
+    fg_colour: TextColourType = "BLACK",
+    bg_colour: str | ColourFamily | None = None,
     bg_shade: ShadeType | None = None,
-    size: Literal["DISPLAY", "HEADING", "TITLE", "BODY", "SMALL"] = "BODY",
+    size: SizeType = "BODY",
     bold: bool = False,
     underline: bool = False,
     italic: bool = False,
@@ -182,205 +127,62 @@ def label_style(
         Resolve a ttk.Label style. Direct 1:1 forwarder to G01c.resolve_text_style().
 
     Args:
-        fg_colour:
-            Foreground colour family dictionary.
-        fg_shade:
-            Shade token within the foreground family.
-        bg_colour:
-            Background colour family dictionary.
-        bg_shade:
-            Shade token within the background family.
-        size:
-            Font size token.
-        bold:
-            Whether the font weight is bold.
-        underline:
-            Whether the text is underlined.
-        italic:
-            Whether the text is italic.
+        fg_colour: Foreground text colour token. Defaults to "BLACK".
+        bg_colour: Background colour preset or colour family dict.
+        bg_shade: Shade token within the background family.
+        size: Font size token (DISPLAY, HEADING, TITLE, BODY, SMALL).
+        bold: Whether the font weight is bold.
+        underline: Whether the text is underlined.
+        italic: Whether the text is italic.
 
     Returns:
-        str:
-            The registered ttk style name.
+        str: The registered ttk style name.
 
     Raises:
-        KeyError:
-            If shade tokens are invalid for their colour families.
-        ValueError:
-            If bg_shade is provided without bg_colour or vice versa.
+        KeyError: If shade tokens are invalid for their colour families.
 
     Notes:
-        - All parameters forwarded directly to G01c.resolve_text_style().
+        All parameters forwarded directly to G01c.resolve_text_style().
     """
     return resolve_text_style(
-        fg_colour=fg_colour,
-        fg_shade=fg_shade,
-        bg_colour=bg_colour,
-        bg_shade=bg_shade,
-        size=size,
-        bold=bold,
-        underline=underline,
-        italic=italic,
+        fg_colour=fg_colour, bg_colour=bg_colour, bg_shade=bg_shade,
+        size=size, bold=bold, underline=underline, italic=italic,
     )
 
 
-def label_style_heading(
-    fg_colour: ColourFamily | None = None,
-    fg_shade: ShadeType | TextShadeType = "BLACK", # UPDATED: Default from DARK to BLACK
-    bold: bool = True,
-) -> str:
-    """
-    Description:
-        Convenience wrapper for heading text. Forwarder to G01c.text_style_heading().
-
-    Args:
-        fg_colour:
-            Foreground colour family.
-        fg_shade:
-            Shade within the family.
-        bold:
-            Whether the heading is bold.
-
-    Returns:
-        str:
-            Registered ttk style name.
-
-    Raises:
-        KeyError:
-            If fg_shade is invalid.
-
-    Notes:
-        - Uses HEADING size.
-    """
-    return text_style_heading(fg_colour=fg_colour, fg_shade=fg_shade, bold=bold)
+def label_style_heading(fg_colour: TextColourType = "BLACK", bold: bool = True) -> str:
+    """Return heading text style (HEADING size). Forwards to G01c.text_style_heading()."""
+    return text_style_heading(fg_colour=fg_colour, bold=bold)
 
 
-def label_style_body(
-    fg_colour: ColourFamily | None = None,
-    fg_shade: ShadeType | TextShadeType = "BLACK", # UPDATED: Default from DARK to BLACK
-) -> str:
-    """
-    Description:
-        Convenience wrapper for body text. Forwarder to G01c.text_style_body().
-
-    Args:
-        fg_colour:
-            Foreground colour family.
-        fg_shade:
-            Shade within the family.
-
-    Returns:
-        str:
-            Registered ttk style name.
-
-    Raises:
-        KeyError:
-            If fg_shade is invalid.
-
-    Notes:
-        - Uses BODY size.
-    """
-    return text_style_body(fg_colour=fg_colour, fg_shade=fg_shade)
+def label_style_body(fg_colour: TextColourType = "BLACK") -> str:
+    """Return body text style (BODY size). Forwards to G01c.text_style_body()."""
+    return text_style_body(fg_colour=fg_colour)
 
 
-def label_style_small(
-    fg_colour: ColourFamily | None = None,
-    fg_shade: ShadeType | TextShadeType = "BLACK", # UPDATED: Default from DARK to BLACK
-) -> str:
-    """
-    Description:
-        Convenience wrapper for small text. Forwarder to G01c.text_style_small().
-
-    Args:
-        fg_colour:
-            Foreground colour family.
-        fg_shade:
-            Shade within the family.
-
-    Returns:
-        str:
-            Registered ttk style name.
-
-    Raises:
-        KeyError:
-            If fg_shade is invalid.
-
-    Notes:
-        - Uses SMALL size.
-    """
-    return text_style_small(fg_colour=fg_colour, fg_shade=fg_shade)
+def label_style_small(fg_colour: TextColourType = "BLACK") -> str:
+    """Return small text style (SMALL size). Forwards to G01c.text_style_small()."""
+    return text_style_small(fg_colour=fg_colour)
 
 
 def label_style_error() -> str:
-    """
-    Description:
-        Convenience wrapper for error text. Forwarder to G01c.text_style_error().
-
-    Args:
-        None.
-
-    Returns:
-        str:
-            Registered ttk style name.
-
-    Raises:
-        None.
-
-    Notes:
-        - Uses ERROR colour family.
-    """
+    """Return error text style (red). Forwards to G01c.text_style_error()."""
     return text_style_error()
 
 
 def label_style_success() -> str:
-    """
-    Description:
-        Convenience wrapper for success text. Forwarder to G01c.text_style_success().
-
-    Args:
-        None.
-
-    Returns:
-        str:
-            Registered ttk style name.
-
-    Raises:
-        None.
-
-    Notes:
-        - Uses SUCCESS colour family.
-    """
+    """Return success text style (green). Forwards to G01c.text_style_success()."""
     return text_style_success()
 
 
 def label_style_warning() -> str:
-    """
-    Description:
-        Convenience wrapper for warning text. Forwarder to G01c.text_style_warning().
-
-    Args:
-        None.
-
-    Returns:
-        str:
-            Registered ttk style name.
-
-    Raises:
-        None.
-
-    Notes:
-        - Uses WARNING colour family.
-    """
+    """Return warning text style (amber). Forwards to G01c.text_style_warning()."""
     return text_style_warning()
 
 
 # ====================================================================================================
 # 4. CONTAINER STYLE WRAPPERS
-# ----------------------------------------------------------------------------------------------------
-# Thin wrappers for G01d_container_styles — forward all parameters directly.
-# Type aliases (ContainerRoleType, ContainerKindType) imported from G01b above.
 # ====================================================================================================
-
 
 def frame_style(
     role: ContainerRoleType = "SECONDARY",
@@ -390,59 +192,35 @@ def frame_style(
     padding: SpacingType | None = "MD",
     relief: str = "flat",
     *,
-    bg_colour: ColourFamily | None = None,
+    bg_colour: str | ColourFamily | None = None,
     bg_shade: ShadeType | None = None,
 ) -> str:
     """
     Description:
-        Resolve a ttk.Frame style. This is a direct 1:1 forwarder to
-        G01d.resolve_container_style(), providing semantic container styling
-        based on role, shade, border, padding, and optional background overrides.
+        Resolve a ttk.Frame style. Direct 1:1 forwarder to G01d.resolve_container_style().
 
     Args:
-        role:
-            Semantic colour role (PRIMARY, SECONDARY, SUCCESS, WARNING, ERROR).
-        shade:
-            Shade token within the selected role's colour family.
-        kind:
-            Semantic container kind used for style naming (SURFACE, CARD, PANEL, SECTION).
-        border:
-            Border weight token. Determines both border width and default relief.
-        padding:
-            Internal padding token.
-        relief:
-            Optional override for the Tkinter relief style.
-            If omitted, the relief is automatically derived from the border weight
-            (e.g., flat for NONE/0, raised for THIN, solid for MEDIUM/THICK).
-        bg_colour:
-            Optional explicit background colour family token.
-        bg_shade:
-            Optional explicit background shade token.
+        role: Semantic colour role (PRIMARY, SECONDARY, SUCCESS, WARNING, ERROR).
+        shade: Shade token within the selected role's colour family.
+        kind: Semantic container kind (SURFACE, CARD, PANEL, SECTION).
+        border: Border weight token (NONE, THIN, MEDIUM, THICK).
+        padding: Internal padding token.
+        relief: Tkinter relief style.
+        bg_colour: Optional explicit background colour override.
+        bg_shade: Optional explicit background shade override.
 
     Returns:
-        str:
-            The registered ttk style name.
+        str: The registered ttk style name.
 
     Raises:
-        KeyError:
-            If the role or shade token is invalid.
-        ValueError:
-            If bg_colour is provided without bg_shade, or vice versa.
+        KeyError: If the role or shade token is invalid.
 
     Notes:
-        - All parameters are forwarded directly to G01d.resolve_container_style().
-        - Relief override should be used sparingly; default behaviour follows the
-          design-system border → relief mapping.
+        All parameters forwarded directly to G01d.resolve_container_style().
     """
     return resolve_container_style(
-        role=role,
-        shade=shade,
-        kind=kind,
-        border=border,
-        padding=padding,
-        relief=relief,
-        bg_colour=bg_colour,
-        bg_shade=bg_shade,
+        role=role, shade=shade, kind=kind, border=border,
+        padding=padding, relief=relief, bg_colour=bg_colour, bg_shade=bg_shade,
     )
 
 
@@ -452,31 +230,7 @@ def frame_style_card(
     border: BorderWeightType | None = "THIN",
     padding: SpacingType | None = "MD",
 ) -> str:
-    """
-    Description:
-        Convenience wrapper for card-style containers. Forwarder to G01d.container_style_card().
-
-    Args:
-        role:
-            Semantic colour role.
-        shade:
-            Shade within the role.
-        border:
-            Border weight token.
-        padding:
-            Internal padding token.
-
-    Returns:
-        str:
-            Registered ttk style name.
-
-    Raises:
-        KeyError:
-            If role or shade is invalid.
-
-    Notes:
-        - Uses raised relief.
-    """
+    """Return card-style container (raised relief). Forwards to G01d.container_style_card()."""
     return container_style_card(role=role, shade=shade, border=border, padding=padding)
 
 
@@ -486,31 +240,7 @@ def frame_style_panel(
     border: BorderWeightType | None = "MEDIUM",
     padding: SpacingType | None = "MD",
 ) -> str:
-    """
-    Description:
-        Convenience wrapper for panel-style containers. Forwarder to G01d.container_style_panel().
-
-    Args:
-        role:
-            Semantic colour role.
-        shade:
-            Shade within the role.
-        border:
-            Border weight token.
-        padding:
-            Internal padding token.
-
-    Returns:
-        str:
-            Registered ttk style name.
-
-    Raises:
-        KeyError:
-            If role or shade is invalid.
-
-    Notes:
-        - Uses solid relief.
-    """
+    """Return panel-style container (solid relief). Forwards to G01d.container_style_panel()."""
     return container_style_panel(role=role, shade=shade, border=border, padding=padding)
 
 
@@ -520,31 +250,7 @@ def frame_style_section(
     border: BorderWeightType | None = "THIN",
     padding: SpacingType | None = "SM",
 ) -> str:
-    """
-    Description:
-        Convenience wrapper for section-style containers. Forwarder to G01d.container_style_section().
-
-    Args:
-        role:
-            Semantic colour role.
-        shade:
-            Shade within the role.
-        border:
-            Border weight token.
-        padding:
-            Internal padding token.
-
-    Returns:
-        str:
-            Registered ttk style name.
-
-    Raises:
-        KeyError:
-            If role or shade is invalid.
-
-    Notes:
-        - Uses flat relief.
-    """
+    """Return section-style container (flat relief). Forwards to G01d.container_style_section()."""
     return container_style_section(role=role, shade=shade, border=border, padding=padding)
 
 
@@ -553,767 +259,537 @@ def frame_style_surface(
     shade: ShadeType = "LIGHT",
     padding: SpacingType | None = "MD",
 ) -> str:
-    """
-    Description:
-        Convenience wrapper for surface-style containers. Forwarder to G01d.container_style_surface().
-
-    Args:
-        role:
-            Semantic colour role.
-        shade:
-            Shade within the role.
-        padding:
-            Internal padding token.
-
-    Returns:
-        str:
-            Registered ttk style name.
-
-    Raises:
-        KeyError:
-            If role or shade is invalid.
-
-    Notes:
-        - No border, flat relief.
-    """
+    """Return surface-style container (no border, flat). Forwards to G01d.container_style_surface()."""
     return container_style_surface(role=role, shade=shade, padding=padding)
 
 
 # ====================================================================================================
 # 5. INPUT STYLE WRAPPERS
-# ----------------------------------------------------------------------------------------------------
-# Thin wrappers for G01e_input_styles — forward all parameters directly.
-# Type aliases (InputControlType, InputRoleType) imported from G01b above.
 # ====================================================================================================
-
 
 def entry_style(
     control_type: InputControlType = "ENTRY",
-    role: InputRoleType = "SECONDARY",
-    shade: ShadeType = "LIGHT",
-    border: BorderWeightType | None = "THIN",
+    bg_colour: str = "SECONDARY",
+    bg_shade: ShadeType = "LIGHT",
+    fg_colour: TextColourType = "BLACK",
+    border_weight: BorderWeightType | None = "THIN",
+    border_colour: str | None = None,
+    border_shade: ShadeType | None = None,
     padding: SpacingType | None = "SM",
+    size: SizeType = "BODY",
 ) -> str:
     """
     Description:
-        Resolve a ttk.Entry/Combobox/Spinbox style. Direct 1:1 forwarder to G01e.resolve_input_style().
+        Resolve a ttk.Entry/Combobox/Spinbox style. Direct 1:1 forwarder to G01e.
 
     Args:
-        control_type:
-            The input widget type.
-        role:
-            Semantic colour role for the field surface.
-        shade:
-            Shade within the role's colour family.
-        border:
-            Border weight token.
-        padding:
-            Internal padding token.
+        control_type: The input widget type (ENTRY, COMBOBOX, SPINBOX).
+        bg_colour: Background colour preset.
+        bg_shade: Shade within the background colour family.
+        fg_colour: Foreground text colour token. Defaults to "BLACK".
+        border_weight: Border weight token (NONE, THIN, MEDIUM, THICK).
+        border_colour: Border colour preset.
+        border_shade: Shade within the border colour family.
+        padding: Internal padding token.
+        size: Font size token.
 
     Returns:
-        str:
-            The registered ttk style name.
+        str: The registered ttk style name.
 
     Raises:
-        KeyError:
-            If role, shade, border, or padding tokens are invalid.
+        KeyError: If colour/shade tokens are invalid.
 
     Notes:
-        - All parameters forwarded directly to G01e.resolve_input_style().
+        All parameters forwarded directly to G01e.resolve_input_style().
     """
     return resolve_input_style(
-        control_type=control_type,
-        role=role,
-        shade=shade,
-        border=border,
-        padding=padding,
+        control_type=control_type, bg_colour=bg_colour, bg_shade=bg_shade,
+        fg_colour=fg_colour, border_weight=border_weight, border_colour=border_colour,
+        border_shade=border_shade, padding=padding, size=size,
     )
 
 
 def entry_style_default() -> str:
-    """
-    Description:
-        Default entry style. Forwarder to G01e.input_style_entry_default().
-
-    Args:
-        None.
-
-    Returns:
-        str:
-            Registered ttk style name.
-
-    Raises:
-        None.
-
-    Notes:
-        - Uses SECONDARY/LIGHT with THIN border.
-    """
+    """Return default entry style (SECONDARY/LIGHT, THIN border). Forwards to G01e."""
     return input_style_entry_default()
 
 
 def entry_style_error() -> str:
-    """
-    Description:
-        Error entry style. Forwarder to G01e.input_style_entry_error().
-
-    Args:
-        None.
-
-    Returns:
-        str:
-            Registered ttk style name.
-
-    Raises:
-        None.
-
-    Notes:
-        - Uses ERROR/LIGHT with MEDIUM border.
-    """
+    """Return error entry style (ERROR/LIGHT, MEDIUM border). Forwards to G01e."""
     return input_style_entry_error()
 
 
 def entry_style_success() -> str:
-    """
-    Description:
-        Success entry style. Forwarder to G01e.input_style_entry_success().
-
-    Args:
-        None.
-
-    Returns:
-        str:
-            Registered ttk style name.
-
-    Raises:
-        None.
-
-    Notes:
-        - Uses SUCCESS/LIGHT with THIN border.
-    """
+    """Return success entry style (SUCCESS/LIGHT, THIN border). Forwards to G01e."""
     return input_style_entry_success()
 
 
 def combobox_style_default() -> str:
-    """
-    Description:
-        Default combobox style. Forwarder to G01e.input_style_combobox_default().
-
-    Args:
-        None.
-
-    Returns:
-        str:
-            Registered ttk style name.
-
-    Raises:
-        None.
-
-    Notes:
-        - Uses SECONDARY/LIGHT with THIN border.
-    """
+    """Return default combobox style (SECONDARY/LIGHT, THIN border). Forwards to G01e."""
     return input_style_combobox_default()
 
 
 def spinbox_style_default() -> str:
-    """
-    Description:
-        Default spinbox style. Forwarder to G01e.input_style_spinbox_default().
-
-    Args:
-        None.
-
-    Returns:
-        str:
-            Registered ttk style name.
-
-    Raises:
-        None.
-
-    Notes:
-        - Uses SECONDARY/LIGHT with THIN border.
-    """
+    """Return default spinbox style (SECONDARY/LIGHT, THIN border). Forwards to G01e."""
     return input_style_spinbox_default()
 
 
 # ====================================================================================================
 # 6. CONTROL STYLE WRAPPERS
-# ----------------------------------------------------------------------------------------------------
-# Thin wrappers for G01f_control_styles — forward all parameters directly.
-# Type aliases (ControlWidgetType, ControlVariantType) imported from G01b above.
 # ====================================================================================================
-
 
 def button_style(
     widget_type: ControlWidgetType = "BUTTON",
     variant: ControlVariantType = "PRIMARY",
-    fg_colour: ColourFamily | None = None,
-    fg_shade: ShadeType | TextShadeType = "BLACK", # UPDATED: Default from DARK to BLACK
-    bg_colour: ColourFamily | None = None,
+    fg_colour: TextColourType = "BLACK",
+    bg_colour: str | ColourFamily | None = None,
     bg_shade_normal: ShadeType | None = None,
     bg_shade_hover: ShadeType | None = None,
     bg_shade_pressed: ShadeType | None = None,
-    border_colour: ColourFamily | None = None,
+    border_colour: str | ColourFamily | None = None,
     border_shade: ShadeType | None = None,
     border_weight: BorderWeightType | None = "THIN",
-    padding: SpacingType | None = "SM",
+    padding: SpacingType | tuple[int, int] | None = "SM",
     relief: str | None = None,
 ) -> str:
     """
     Description:
-        Resolve a ttk.Button/Checkbutton/Radiobutton style.
-        Direct 1:1 forwarder to G01f.resolve_control_style().
+        Resolve a ttk.Button/Checkbutton/Radiobutton style. Direct 1:1 forwarder to G01f.
 
     Args:
-        widget_type:
-            Logical widget type token.
-        variant:
-            Semantic role / colour variant.
-        fg_colour:
-            Foreground colour family.
-        fg_shade:
-            Shade within the foreground family.
-        bg_colour:
-            Background colour family.
-        bg_shade_normal:
-            Shade for normal background state.
-        bg_shade_hover:
-            Shade for hover background state.
-        bg_shade_pressed:
-            Shade for pressed background state.
-        border_colour:
-            Border colour family.
-        border_shade:
-            Shade within the border family.
-        border_weight:
-            Border weight token.
-        padding:
-            Internal padding token.
-        relief:
-            Tcl/Tk relief style.
+        widget_type: Logical widget type (BUTTON, CHECKBOX, RADIO, SWITCH).
+        variant: Semantic role / colour variant.
+        fg_colour: Foreground text colour token. Defaults to "BLACK".
+        bg_colour: Background colour preset or colour family dict.
+        bg_shade_normal: Shade for normal background state.
+        bg_shade_hover: Shade for hover background state.
+        bg_shade_pressed: Shade for pressed background state.
+        border_colour: Border colour preset or colour family dict.
+        border_shade: Shade within the border family.
+        border_weight: Border weight token.
+        padding: Internal padding token or tuple.
+        relief: Tcl/Tk relief style.
 
     Returns:
-        str:
-            The registered ttk style name.
+        str: The registered ttk style name.
 
     Raises:
-        KeyError:
-            If shade tokens are invalid for their colour families.
-        ValueError:
-            If widget_type or variant are unsupported.
+        KeyError: If shade tokens are invalid for their colour families.
 
     Notes:
-        - All parameters forwarded directly to G01f.resolve_control_style().
+        All parameters forwarded directly to G01f.resolve_control_style().
     """
     return resolve_control_style(
-        widget_type=widget_type,
-        variant=variant,
-        fg_colour=fg_colour,
-        fg_shade=fg_shade,
-        bg_colour=bg_colour,
-        bg_shade_normal=bg_shade_normal,
-        bg_shade_hover=bg_shade_hover,
-        bg_shade_pressed=bg_shade_pressed,
-        border_colour=border_colour,
-        border_shade=border_shade,
-        border_weight=border_weight,
-        padding=padding,
-        relief=relief,
+        widget_type=widget_type, variant=variant, fg_colour=fg_colour,
+        bg_colour=bg_colour, bg_shade_normal=bg_shade_normal,
+        bg_shade_hover=bg_shade_hover, bg_shade_pressed=bg_shade_pressed,
+        border_colour=border_colour, border_shade=border_shade,
+        border_weight=border_weight, padding=padding, relief=relief,
     )
 
 
 def button_primary() -> str:
-    """
-    Description:
-        Primary button style. Forwarder to G01f.control_button_primary().
-
-    Args:
-        None.
-
-    Returns:
-        str:
-            Registered ttk style name.
-
-    Raises:
-        None.
-
-    Notes:
-        - Uses PRIMARY variant.
-    """
+    """Return primary button style (white text on blue). Forwards to G01f."""
     return control_button_primary()
 
 
 def button_secondary() -> str:
-    """
-    Description:
-        Secondary button style. Forwarder to G01f.control_button_secondary().
-
-    Args:
-        None.
-
-    Returns:
-        str:
-            Registered ttk style name.
-
-    Raises:
-        None.
-
-    Notes:
-        - Uses SECONDARY variant.
-    """
+    """Return secondary button style (black text). Forwards to G01f."""
     return control_button_secondary()
 
 
 def button_success() -> str:
-    """
-    Description:
-        Success button style. Forwarder to G01f.control_button_success().
-
-    Args:
-        None.
-
-    Returns:
-        str:
-            Registered ttk style name.
-
-    Raises:
-        None.
-
-    Notes:
-        - Uses SUCCESS variant.
-    """
+    """Return success button style (white text on green). Forwards to G01f."""
     return control_button_success()
 
 
 def button_warning() -> str:
-    """
-    Description:
-        Warning button style. Forwarder to G01f.control_button_warning().
-
-    Args:
-        None.
-
-    Returns:
-        str:
-            Registered ttk style name.
-
-    Raises:
-        None.
-
-    Notes:
-        - Uses WARNING variant.
-    """
+    """Return warning button style (black text on yellow). Forwards to G01f."""
     return control_button_warning()
 
 
 def button_error() -> str:
-    """
-    Description:
-        Error button style. Forwarder to G01f.control_button_error().
-
-    Args:
-        None.
-
-    Returns:
-        str:
-            Registered ttk style name.
-
-    Raises:
-        None.
-
-    Notes:
-        - Uses ERROR variant.
-    """
+    """Return error button style (white text on red). Forwards to G01f."""
     return control_button_error()
 
 
 def checkbox_primary() -> str:
-    """
-    Description:
-        Primary checkbox style. Forwarder to G01f.control_checkbox_primary().
-
-    Args:
-        None.
-
-    Returns:
-        str:
-            Registered ttk style name.
-
-    Raises:
-        None.
-
-    Notes:
-        - Uses PRIMARY variant.
-    """
+    """Return primary checkbox style. Forwards to G01f."""
     return control_checkbox_primary()
 
 
 def checkbox_success() -> str:
-    """
-    Description:
-        Success checkbox style. Forwarder to G01f.control_checkbox_success().
-
-    Args:
-        None.
-
-    Returns:
-        str:
-            Registered ttk style name.
-
-    Raises:
-        None.
-
-    Notes:
-        - Uses SUCCESS variant.
-    """
+    """Return success checkbox style. Forwards to G01f."""
     return control_checkbox_success()
 
 
 def radio_primary() -> str:
-    """
-    Description:
-        Primary radio button style. Forwarder to G01f.control_radio_primary().
-
-    Args:
-        None.
-
-    Returns:
-        str:
-            Registered ttk style name.
-
-    Raises:
-        None.
-
-    Notes:
-        - Uses PRIMARY variant.
-    """
+    """Return primary radio button style. Forwards to G01f."""
     return control_radio_primary()
 
 
 def radio_warning() -> str:
-    """
-    Description:
-        Warning radio button style. Forwarder to G01f.control_radio_warning().
-
-    Args:
-        None.
-
-    Returns:
-        str:
-            Registered ttk style name.
-
-    Raises:
-        None.
-
-    Notes:
-        - Uses WARNING variant.
-    """
+    """Return warning radio button style. Forwards to G01f."""
     return control_radio_warning()
 
 
 def switch_primary() -> str:
-    """
-    Description:
-        Primary switch style. Forwarder to G01f.control_switch_primary().
-
-    Args:
-        None.
-
-    Returns:
-        str:
-            Registered ttk style name.
-
-    Raises:
-        None.
-
-    Notes:
-        - Uses PRIMARY variant.
-    """
+    """Return primary switch style. Forwards to G01f."""
     return control_switch_primary()
 
 
 def switch_error() -> str:
-    """
-    Description:
-        Error switch style. Forwarder to G01f.control_switch_error().
-
-    Args:
-        None.
-
-    Returns:
-        str:
-            Registered ttk style name.
-
-    Raises:
-        None.
-
-    Notes:
-        - Uses ERROR variant.
-    """
+    """Return error switch style. Forwards to G01f."""
     return control_switch_error()
 
 
 # ====================================================================================================
 # 7. WIDGET FACTORY FUNCTIONS
-# ----------------------------------------------------------------------------------------------------
-# Factory functions that create styled ttk widgets in a single call.
-# These combine widget instantiation with G01 style resolution.
 # ====================================================================================================
 
 def make_label(
     parent: tk.Misc | tk.Widget,
     text: str = "",
-    fg_colour: ColourFamily | None = None,
-    fg_shade: ShadeType | TextShadeType = "BLACK", # UPDATED: Default from DARK to BLACK
-    bg_colour: ColourFamily | None = None,
+    fg_colour: TextColourType = "BLACK",
+    bg_colour: str | ColourFamily | None = None,
     bg_shade: ShadeType | None = None,
-    size: Literal["DISPLAY", "HEADING", "TITLE", "BODY", "SMALL"] = "BODY",
+    size: SizeType = "BODY",
     bold: bool = False,
     underline: bool = False,
     italic: bool = False,
     **kwargs: Any,
 ) -> ttk.Label:
     """
-    Create a styled label. Use `fg_colour`/`fg_shade` for text colour, `bg_colour`/`bg_shade` for background.
-
     Description:
         Create a styled ttk.Label widget. Resolves style via G01c and applies it.
 
     Args:
-        parent:
-            The parent widget.
-        text:
-            Label text content.
-        fg_colour:
-            Foreground colour family dictionary.
-        fg_shade:
-            Shade token within the foreground family.
-        bg_colour:
-            Background colour family dictionary.
-        bg_shade:
-            Shade token within the background family.
-        size:
-            Font size token.
-        bold:
-            Whether the font weight is bold.
-        underline:
-            Whether the text is underlined.
-        italic:
-            Whether the text is italic.
-        **kwargs:
-            Additional ttk.Label arguments (anchor, width, etc.).
+        parent: The parent widget.
+        text: Label text content.
+        fg_colour: Foreground text colour token. Defaults to "BLACK".
+        bg_colour: Background colour preset or colour family dict.
+        bg_shade: Shade within the background family. Defaults to MID if bg_colour set.
+        size: Font size token.
+        bold: Whether the font weight is bold.
+        underline: Whether the text is underlined.
+        italic: Whether the text is italic.
+        **kwargs: Additional ttk.Label arguments (anchor, width, etc.).
 
     Returns:
-        ttk.Label:
-            The created label widget.
+        ttk.Label: The created label widget.
 
     Raises:
-        KeyError:
-            If shade tokens are invalid for their colour families.
-        ValueError:
-            If bg_shade is provided without bg_colour or vice versa.
+        KeyError: If shade tokens are invalid for their colour families.
 
     Notes:
-        - Style resolved via label_style().
-        - Widget is NOT packed/gridded; caller must place it.
+        Widget is NOT packed/gridded; caller must place it.
     """
+    bg_colour_resolved = resolve_colour(bg_colour)
+    if bg_colour_resolved is not None and bg_shade is None:
+        bg_shade = cast(ShadeType, get_default_shade(bg_colour_resolved))
+
     style_name = label_style(
-        fg_colour=fg_colour,
-        fg_shade=fg_shade,
-        bg_colour=bg_colour,
-        bg_shade=bg_shade,
-        size=size,
-        bold=bold,
-        underline=underline,
-        italic=italic,
+        fg_colour=fg_colour, bg_colour=bg_colour_resolved, bg_shade=bg_shade,
+        size=size, bold=bold, underline=underline, italic=italic,
     )
     return ttk.Label(parent, text=text, style=style_name, **kwargs)
 
 
+class StatusLabel:
+    """A label that can toggle between OK and error states."""
+
+    def __init__(
+        self,
+        widget: ttk.Label,
+        text_ok: str,
+        text_error: str,
+        style_ok: str,
+        style_error: str,
+    ) -> None:
+        self.widget = widget
+        self._text_ok = text_ok
+        self._text_error = text_error
+        self._style_ok = style_ok
+        self._style_error = style_error
+
+    def set_ok(self) -> None:
+        """Set to OK state (typically green)."""
+        self.widget.configure(text=self._text_ok, style=self._style_ok)
+
+    def set_error(self) -> None:
+        """Set to error state (typically red)."""
+        self.widget.configure(text=self._text_error, style=self._style_error)
+
+    def set_state(self, is_ok: bool) -> None:
+        """Set state via boolean. True = OK, False = error."""
+        if is_ok:
+            self.set_ok()
+        else:
+            self.set_error()
+
+    def pack(self, **kwargs: Any) -> "StatusLabel":
+        self.widget.pack(**kwargs)
+        return self
+
+    def grid(self, **kwargs: Any) -> "StatusLabel":
+        self.widget.grid(**kwargs)
+        return self
+
+    def place(self, **kwargs: Any) -> "StatusLabel":
+        self.widget.place(**kwargs)
+        return self
+
+
+def make_status_label(
+    parent: tk.Misc | tk.Widget,
+    text_ok: str = "OK",
+    text_error: str = "Error",
+    fg_colour_ok: TextColourType = "SUCCESS",
+    fg_colour_error: TextColourType = "ERROR",
+    bg_colour: str | ColourFamily | None = None,
+    bg_shade: ShadeType | None = None,
+    size: SizeType = "BODY",
+    bold: bool = False,
+    initial_ok: bool = False,
+    **kwargs: Any,
+) -> StatusLabel:
+    """
+    Description:
+        Create a label that toggles between OK and error states.
+
+    Args:
+        parent: The parent widget.
+        text_ok: Text to display in OK state. Defaults to "OK".
+        text_error: Text to display in error state. Defaults to "Error".
+        fg_colour_ok: Foreground colour for OK state. Defaults to "SUCCESS".
+        fg_colour_error: Foreground colour for error state. Defaults to "ERROR".
+        bg_colour: Background colour (same for both states).
+        bg_shade: Background shade (same for both states).
+        size: Font size token.
+        bold: Whether the text is bold.
+        initial_ok: Initial state. True = OK, False = error. Defaults to False.
+        **kwargs: Additional ttk.Label arguments.
+
+    Returns:
+        StatusLabel: Wrapper with .set_ok(), .set_error(), .set_state(bool) methods.
+
+    Raises:
+        KeyError: If shade tokens are invalid for their colour families.
+
+    Notes:
+        Call .set_ok() to show OK state, .set_error() to show error state.
+    """
+    bg_resolved = resolve_colour(bg_colour)
+    if bg_resolved is not None and bg_shade is None:
+        bg_shade = cast(ShadeType, get_default_shade(bg_resolved))
+
+    style_ok = label_style(fg_colour=fg_colour_ok, bg_colour=bg_resolved, bg_shade=bg_shade, size=size, bold=bold)
+    style_error = label_style(fg_colour=fg_colour_error, bg_colour=bg_resolved, bg_shade=bg_shade, size=size, bold=bold)
+
+    initial_text = text_ok if initial_ok else text_error
+    initial_style = style_ok if initial_ok else style_error
+    label = ttk.Label(parent, text=initial_text, style=initial_style, **kwargs)
+
+    return StatusLabel(widget=label, text_ok=text_ok, text_error=text_error, style_ok=style_ok, style_error=style_error)
+
+
 def make_frame(
     parent: tk.Misc | tk.Widget,
-    role: ContainerRoleType = "SECONDARY",
-    shade: ShadeType = "LIGHT",
     kind: ContainerKindType = "SURFACE",
-    border: BorderWeightType | None = "THIN",
-    padding: SpacingType | None = "MD",
-    relief: str = "flat",
-    *,
-    bg_colour: ColourFamily | None = None,
+    bg_colour: str | ColourFamily | None = "SECONDARY",
     bg_shade: ShadeType | None = None,
+    border_weight: BorderWeightType | None = "THIN",
+    border_colour: str | ColourFamily | None = None,
+    border_shade: ShadeType | None = None,
+    padding: SpacingType | None = "MD",
     **kwargs: Any,
 ) -> ttk.Frame:
     """
-    Create a styled frame/container. Use `role`/`shade` for presets (SECONDARY, SUCCESS, etc.), or explicit `bg_colour`.
-
     Description:
-        Create a styled ttk.Frame widget. Resolves style via G01d and applies it.
+        Create a styled ttk.Frame widget. Supports coloured borders via nested frame technique.
 
     Args:
-        parent:
-            The parent widget.
-        role:
-            Semantic colour role.
-        shade:
-            Shade within the role's colour family.
-        kind:
-            Container kind for semantic naming.
-        border:
-            Border weight token.
-        padding:
-            Internal padding token.
-        relief:
-            Tkinter relief style.
-        bg_colour:
-            Optional explicit background colour family.
-        bg_shade:
-            Optional background shade token.
-        **kwargs:
-            Additional ttk.Frame arguments (width, height, etc.).
+        parent: The parent widget.
+        kind: Semantic container kind (SURFACE, CARD, PANEL, SECTION).
+        bg_colour: Background colour. Defaults to "SECONDARY".
+        bg_shade: Shade within the background family. Defaults to MID.
+        border_weight: Border weight token (NONE, THIN, MEDIUM, THICK).
+        border_colour: Border colour for coloured borders (uses nested frame technique).
+        border_shade: Shade within the border colour family.
+        padding: Internal padding token.
+        **kwargs: Additional ttk.Frame arguments.
 
     Returns:
-        ttk.Frame:
-            The created frame widget.
+        ttk.Frame: The frame with a `.content` attribute for adding children.
 
     Raises:
-        KeyError:
-            If role or shade is invalid.
-        ValueError:
-            If bg_colour is provided without bg_shade or vice versa.
+        KeyError: If shade tokens are invalid for their colour families.
 
     Notes:
-        - Style resolved via frame_style().
-        - Widget is NOT packed/gridded; caller must place it.
+        Always add children to `frame.content`, not `frame` directly.
     """
+    bg_colour_resolved = resolve_colour(bg_colour)
+    border_colour_resolved = resolve_colour(border_colour)
+
+    if bg_colour_resolved is not None and bg_shade is None:
+        bg_shade = cast(ShadeType, get_default_shade(bg_colour_resolved))
+    if border_colour_resolved is not None and border_shade is None:
+        border_shade = cast(ShadeType, get_default_shade(border_colour_resolved))
+
+    if border_colour_resolved is not None and border_weight not in (None, "NONE"):
+        border_px = BORDER_WEIGHTS.get(border_weight, 1)
+
+        outer_style = frame_style(
+            role="SECONDARY", shade="MID", kind=kind, border="NONE", padding=None,
+            relief="flat", bg_colour=border_colour_resolved, bg_shade=border_shade,
+        )
+        outer = ttk.Frame(parent, style=outer_style, **kwargs)
+
+        inner_style = frame_style(
+            role="SECONDARY", shade="MID", kind=kind, border="NONE", padding=padding,
+            relief="flat", bg_colour=bg_colour_resolved, bg_shade=bg_shade,
+        )
+        inner = ttk.Frame(outer, style=inner_style)
+        inner.pack(fill="both", expand=True, padx=border_px, pady=border_px)
+
+        outer.content = inner  # type: ignore[attr-defined]
+        return outer
+
     style_name = frame_style(
-        role=role,
-        shade=shade,
-        kind=kind,
-        border=border,
-        padding=padding,
-        relief=relief,
-        bg_colour=bg_colour,
-        bg_shade=bg_shade,
+        role="SECONDARY", shade="MID", kind=kind, border=border_weight, padding=padding,
+        relief="flat", bg_colour=bg_colour_resolved, bg_shade=bg_shade,
     )
-    return ttk.Frame(parent, style=style_name, **kwargs)
+    frame = ttk.Frame(parent, style=style_name, **kwargs)
+    frame.content = frame  # type: ignore[attr-defined]
+    return frame
 
 
 def make_entry(
     parent: tk.Misc | tk.Widget,
     textvariable: tk.StringVar | None = None,
-    control_type: InputControlType = "ENTRY",
-    role: InputRoleType = "SECONDARY",
-    shade: ShadeType = "LIGHT",
-    border: BorderWeightType | None = "THIN",
+    bg_colour: str = "SECONDARY",
+    bg_shade: ShadeType = "LIGHT",
+    fg_colour: TextColourType = "BLACK",
+    border_weight: BorderWeightType | None = "THIN",
+    border_colour: str | None = None,
+    border_shade: ShadeType | None = None,
     padding: SpacingType | None = "SM",
+    size: SizeType = "BODY",
     **kwargs: Any,
 ) -> ttk.Entry:
     """
-    Create a styled text entry field. Use `role`/`shade` for appearance (SECONDARY, ERROR, SUCCESS).
-
     Description:
         Create a styled ttk.Entry widget. Resolves style via G01e and applies it.
 
     Args:
-        parent:
-            The parent widget.
-        textvariable:
-            Optional StringVar to bind to the entry.
-        control_type:
-            The input widget type (for style resolution).
-        role:
-            Semantic colour role for the field surface.
-        shade:
-            Shade within the role's colour family.
-        border:
-            Border weight token.
-        padding:
-            Internal padding token.
-        **kwargs:
-            Additional ttk.Entry arguments (width, show, etc.).
+        parent: The parent widget.
+        textvariable: Optional StringVar to bind to the entry.
+        bg_colour: Background colour preset. Defaults to "SECONDARY".
+        bg_shade: Background shade. Defaults to "LIGHT".
+        fg_colour: Foreground text colour token. Defaults to "BLACK".
+        border_weight: Border weight token.
+        border_colour: Border colour preset.
+        border_shade: Border shade.
+        padding: Internal padding token.
+        size: Font size token.
+        **kwargs: Additional ttk.Entry arguments.
 
     Returns:
-        ttk.Entry:
-            The created entry widget.
+        ttk.Entry: The created entry widget.
 
     Raises:
-        KeyError:
-            If role, shade, border, or padding tokens are invalid.
+        KeyError: If shade, border, or padding tokens are invalid.
 
     Notes:
-        - Style resolved via entry_style().
-        - Widget is NOT packed/gridded; caller must place it.
+        Widget is NOT packed/gridded; caller must place it.
     """
     style_name = entry_style(
-        control_type=control_type,
-        role=role,
-        shade=shade,
-        border=border,
-        padding=padding,
+        control_type="ENTRY", bg_colour=bg_colour, bg_shade=bg_shade, fg_colour=fg_colour,
+        border_weight=border_weight, border_colour=border_colour, border_shade=border_shade,
+        padding=padding, size=size,
     )
+    font_key = resolve_text_font(size=size or "BODY", bold=False)
+
     if textvariable is not None:
-        return ttk.Entry(parent, textvariable=textvariable, style=style_name, **kwargs)
-    return ttk.Entry(parent, style=style_name, **kwargs)
+        return ttk.Entry(parent, textvariable=textvariable, style=style_name, font=font_key, **kwargs)
+    return ttk.Entry(parent, style=style_name, font=font_key, **kwargs)
 
 
 def make_combobox(
     parent: tk.Misc | tk.Widget,
     textvariable: tk.StringVar | None = None,
     values: list[str] | tuple[str, ...] | None = None,
-    role: InputRoleType = "SECONDARY",
-    shade: ShadeType = "LIGHT",
-    border: BorderWeightType | None = "THIN",
+    bg_colour: str = "SECONDARY",
+    bg_shade: ShadeType = "LIGHT",
+    fg_colour: TextColourType = "BLACK",
+    border_weight: BorderWeightType | None = "THIN",
+    border_colour: str | None = None,
+    border_shade: ShadeType | None = None,
     padding: SpacingType | None = "SM",
+    size: SizeType = "BODY",
     **kwargs: Any,
 ) -> ttk.Combobox:
     """
-    Create a styled dropdown combobox. Use `role`/`shade` for appearance, `values` for options.
-
     Description:
         Create a styled ttk.Combobox widget. Resolves style via G01e and applies it.
 
     Args:
-        parent:
-            The parent widget.
-        textvariable:
-            Optional StringVar to bind to the combobox.
-        values:
-            Optional list of values for the dropdown.
-        role:
-            Semantic colour role for the field surface.
-        shade:
-            Shade within the role's colour family.
-        border:
-            Border weight token.
-        padding:
-            Internal padding token.
-        **kwargs:
-            Additional ttk.Combobox arguments (width, state, etc.).
+        parent: The parent widget.
+        textvariable: Optional StringVar to bind.
+        values: Optional list of dropdown values.
+        bg_colour: Background colour preset. Defaults to "SECONDARY".
+        bg_shade: Background shade. Defaults to "LIGHT".
+        fg_colour: Foreground text colour token. Defaults to "BLACK".
+        border_weight: Border weight token.
+        border_colour: Border colour preset.
+        border_shade: Border shade.
+        padding: Internal padding token.
+        size: Font size token.
+        **kwargs: Additional ttk.Combobox arguments.
 
     Returns:
-        ttk.Combobox:
-            The created combobox widget.
+        ttk.Combobox: The created combobox widget.
 
     Raises:
-        KeyError:
-            If role, shade, border, or padding tokens are invalid.
+        KeyError: If colour/shade tokens are invalid.
 
     Notes:
-        - Style resolved via entry_style() with control_type="COMBOBOX".
-        - Widget is NOT packed/gridded; caller must place it.
+        Mousewheel scrolling is disabled to prevent accidental value changes.
     """
     style_name = entry_style(
-        control_type="COMBOBOX",
-        role=role,
-        shade=shade,
-        border=border,
-        padding=padding,
+        control_type="COMBOBOX", bg_colour=bg_colour, bg_shade=bg_shade, fg_colour=fg_colour,
+        border_weight=border_weight, border_colour=border_colour, border_shade=border_shade,
+        padding=padding, size=size,
     )
+
     combo_kwargs: dict[str, Any] = {"style": style_name, **kwargs}
     if textvariable is not None:
         combo_kwargs["textvariable"] = textvariable
     if values is not None:
         combo_kwargs["values"] = values
-    return ttk.Combobox(parent, **combo_kwargs)
+
+    combo = ttk.Combobox(parent, **combo_kwargs)
+
+    combo.bind("<MouseWheel>", lambda e: "break")
+    combo.bind("<Button-4>", lambda e: "break")
+    combo.bind("<Button-5>", lambda e: "break")
+
+    def _bind_dropdown_scroll(event: tk.Event) -> None:  # type: ignore[type-arg]
+        try:
+            popdown = combo.tk.call("ttk::combobox::PopdownWindow", combo)
+            combo.tk.call("bind", popdown, "<MouseWheel>", "break")
+            combo.tk.call("bind", popdown, "<Button-4>", "break")
+            combo.tk.call("bind", popdown, "<Button-5>", "break")
+            combo.tk.call("bind", f"{popdown}.f.l", "<MouseWheel>", "break")
+            combo.tk.call("bind", f"{popdown}.f.l", "<Button-4>", "break")
+            combo.tk.call("bind", f"{popdown}.f.l", "<Button-5>", "break")
+        except tk.TclError:
+            pass
+
+    combo.bind("<Button-1>", _bind_dropdown_scroll, add="+")
+    combo.bind("<Down>", _bind_dropdown_scroll, add="+")
+
+    return combo
 
 
 def make_spinbox(
@@ -1321,57 +797,50 @@ def make_spinbox(
     textvariable: tk.StringVar | None = None,
     from_: float = 0,
     to: float = 100,
-    role: InputRoleType = "SECONDARY",
-    shade: ShadeType = "LIGHT",
-    border: BorderWeightType | None = "THIN",
+    bg_colour: str = "SECONDARY",
+    bg_shade: ShadeType = "LIGHT",
+    fg_colour: TextColourType = "BLACK",
+    border_weight: BorderWeightType | None = "THIN",
+    border_colour: str | None = None,
+    border_shade: ShadeType | None = None,
     padding: SpacingType | None = "SM",
+    size: SizeType = "BODY",
     **kwargs: Any,
 ) -> ttk.Spinbox:
     """
-    Create a styled numeric spinbox. Use `from_`/`to` for range, `role`/`shade` for appearance.
-
     Description:
         Create a styled ttk.Spinbox widget. Resolves style via G01e and applies it.
 
     Args:
-        parent:
-            The parent widget.
-        textvariable:
-            Optional StringVar to bind to the spinbox.
-        from_:
-            Minimum value.
-        to:
-            Maximum value.
-        role:
-            Semantic colour role for the field surface.
-        shade:
-            Shade within the role's colour family.
-        border:
-            Border weight token.
-        padding:
-            Internal padding token.
-        **kwargs:
-            Additional ttk.Spinbox arguments (increment, wrap, etc.).
+        parent: The parent widget.
+        textvariable: Optional StringVar to bind.
+        from_: Minimum value.
+        to: Maximum value.
+        bg_colour: Background colour preset. Defaults to "SECONDARY".
+        bg_shade: Background shade. Defaults to "LIGHT".
+        fg_colour: Foreground text colour token. Defaults to "BLACK".
+        border_weight: Border weight token.
+        border_colour: Border colour preset.
+        border_shade: Border shade.
+        padding: Internal padding token.
+        size: Font size token.
+        **kwargs: Additional ttk.Spinbox arguments.
 
     Returns:
-        ttk.Spinbox:
-            The created spinbox widget.
+        ttk.Spinbox: The created spinbox widget.
 
     Raises:
-        KeyError:
-            If role, shade, border, or padding tokens are invalid.
+        KeyError: If colour/shade tokens are invalid.
 
     Notes:
-        - Style resolved via entry_style() with control_type="SPINBOX".
-        - Widget is NOT packed/gridded; caller must place it.
+        Widget is NOT packed/gridded; caller must place it.
     """
     style_name = entry_style(
-        control_type="SPINBOX",
-        role=role,
-        shade=shade,
-        border=border,
-        padding=padding,
+        control_type="SPINBOX", bg_colour=bg_colour, bg_shade=bg_shade, fg_colour=fg_colour,
+        border_weight=border_weight, border_colour=border_colour, border_shade=border_shade,
+        padding=padding, size=size,
     )
+
     spin_kwargs: dict[str, Any] = {"style": style_name, "from_": from_, "to": to, **kwargs}
     if textvariable is not None:
         spin_kwargs["textvariable"] = textvariable
@@ -1382,92 +851,76 @@ def make_button(
     parent: tk.Misc | tk.Widget,
     text: str = "",
     command: Callable[[], None] | None = None,
-    widget_type: ControlWidgetType = "BUTTON",
-    variant: ControlVariantType = "PRIMARY",
-    fg_colour: ColourFamily | None = None,
-    fg_shade: ShadeType | TextShadeType = "BLACK", # UPDATED: Default from DARK to BLACK
-    bg_colour: ColourFamily | None = None,
-    bg_shade_normal: ShadeType | None = None,
-    bg_shade_hover: ShadeType | None = None,
-    bg_shade_pressed: ShadeType | None = None,
-    border_colour: ColourFamily | None = None,
+    bg_colour: str | ColourFamily | None = "PRIMARY",
+    bg_shade: ShadeType | None = None,
+    fg_colour: TextColourType = "WHITE",
+    size: SizeType = "BODY",
+    bold: bool = False,
+    border_colour: str | ColourFamily | None = None,
     border_shade: ShadeType | None = None,
     border_weight: BorderWeightType | None = "THIN",
-    padding: SpacingType | None = "SM",
-    relief: str | None = None,
+    padding: SpacingType | tuple[int, int] | None = (SPACING_SM, 0),
     **kwargs: Any,
 ) -> ttk.Button:
     """
-    Create a styled button. Use `variant` for presets (PRIMARY, SUCCESS, etc.), or override with explicit colours.
-
     Description:
-        Create a styled ttk.Button widget. Resolves style via G01f and applies it.
+        Create a styled ttk.Button widget. Hover/pressed states auto-derived from bg_shade.
 
     Args:
-        parent:
-            The parent widget.
-        text:
-            Button text content.
-        command:
-            Optional callback function for button click.
-        widget_type:
-            Logical widget type token.
-        variant:
-            Semantic role / colour variant.
-        fg_colour:
-            Foreground colour family.
-        fg_shade:
-            Shade within the foreground family.
-        bg_colour:
-            Background colour family.
-        bg_shade_normal:
-            Shade for normal background state.
-        bg_shade_hover:
-            Shade for hover background state.
-        bg_shade_pressed:
-            Shade for pressed background state.
-        border_colour:
-            Border colour family.
-        border_shade:
-            Shade within the border family.
-        border_weight:
-            Border weight token.
-        padding:
-            Internal padding token.
-        relief:
-            Tcl/Tk relief style.
-        **kwargs:
-            Additional ttk.Button arguments (width, etc.).
+        parent: The parent widget.
+        text: Button text content.
+        command: Optional callback function for button click.
+        bg_colour: Background colour. Defaults to "PRIMARY".
+        bg_shade: Base shade for background. Hover/pressed states are auto-derived.
+        fg_colour: Foreground text colour token. Defaults to "WHITE".
+        size: Font size token.
+        bold: Whether the button text is bold.
+        border_colour: Border colour.
+        border_shade: Shade within the border colour family.
+        border_weight: Border weight token.
+        padding: Internal padding. Token or tuple (h, v).
+        **kwargs: Additional ttk.Button arguments.
 
     Returns:
-        ttk.Button:
-            The created button widget.
+        ttk.Button: The created button widget.
 
     Raises:
-        KeyError:
-            If shade tokens are invalid for their colour families.
-        ValueError:
-            If widget_type or variant are unsupported.
+        KeyError: If shade tokens are invalid for their colour families.
 
     Notes:
-        - Style resolved via button_style().
-        - Widget is NOT packed/gridded; caller must place it.
+        Hover/pressed states auto-derived: LIGHT→MID→DARK or DARK→MID→LIGHT.
     """
+    bg_colour_resolved = resolve_colour(bg_colour)
+    border_colour_resolved = resolve_colour(border_colour)
+
+    if bg_colour_resolved is not None and bg_shade is None:
+        bg_shade = cast(ShadeType, get_default_shade(bg_colour_resolved))
+    if border_colour_resolved is not None and border_shade is None:
+        border_shade = cast(ShadeType, get_default_shade(border_colour_resolved))
+
+    shade_order: list[ShadeType] = ["LIGHT", "MID", "DARK", "XDARK"]
+    bg_shade_upper = bg_shade.upper() if bg_shade else "MID"
+
+    if bg_shade_upper in shade_order:
+        idx = shade_order.index(bg_shade_upper)
+        if idx <= 1:
+            bg_shade_hover = shade_order[min(idx + 1, 3)]
+            bg_shade_pressed = shade_order[min(idx + 2, 3)]
+        else:
+            bg_shade_hover = shade_order[max(idx - 1, 0)]
+            bg_shade_pressed = shade_order[max(idx - 2, 0)]
+    else:
+        bg_shade_hover = "DARK"
+        bg_shade_pressed = "XDARK"
+
     style_name = button_style(
-        widget_type=widget_type,
-        variant=variant,
-        fg_colour=fg_colour,
-        fg_shade=fg_shade,
-        bg_colour=bg_colour,
-        bg_shade_normal=bg_shade_normal,
-        bg_shade_hover=bg_shade_hover,
-        bg_shade_pressed=bg_shade_pressed,
-        border_colour=border_colour,
-        border_shade=border_shade,
-        border_weight=border_weight,
-        padding=padding,
-        relief=relief,
+        widget_type="BUTTON", variant="PRIMARY", fg_colour=fg_colour,
+        bg_colour=bg_colour_resolved, bg_shade_normal=bg_shade,
+        bg_shade_hover=bg_shade_hover, bg_shade_pressed=bg_shade_pressed,
+        border_colour=border_colour_resolved, border_shade=border_shade,
+        border_weight=border_weight, padding=padding,
     )
+
     btn_kwargs: dict[str, Any] = {"text": text, "style": style_name, **kwargs}
     if command is not None:
         btn_kwargs["command"] = command
@@ -1479,90 +932,52 @@ def make_checkbox(
     text: str = "",
     variable: tk.BooleanVar | None = None,
     command: Callable[[], None] | None = None,
-    variant: ControlVariantType = "PRIMARY",
-    fg_colour: ColourFamily | None = None,
-    fg_shade: ShadeType | TextShadeType = "BLACK",
-    bg_colour: ColourFamily | None = None,
-    bg_shade_normal: ShadeType | None = None,
-    bg_shade_hover: ShadeType | None = None,
-    bg_shade_pressed: ShadeType | None = None,
-    border_colour: ColourFamily | None = None,
-    border_shade: ShadeType | None = None,
-    border_weight: BorderWeightType | None = "THIN",
-    padding: SpacingType | None = "SM",
-    relief: str | None = None,
+    bg_colour: str | ColourFamily | None = None,
+    bg_shade: ShadeType | None = None,
+    fg_colour: TextColourType = "BLACK",
+    size: SizeType = "BODY",
+    bold: bool = False,
+    indent: int = SPACING_SM,
     **kwargs: Any,
 ) -> ttk.Checkbutton:
     """
-    Create a styled checkbox. Use `variant` for presets (PRIMARY, SUCCESS, etc.), or override with explicit colours.
-
     Description:
-        Create a styled ttk.Checkbutton widget. Resolves style via G01f and applies it.
+        Create a styled ttk.Checkbutton widget. Indicator uses system defaults.
 
     Args:
-        parent:
-            The parent widget.
-        text:
-            Checkbox text content.
-        variable:
-            Optional BooleanVar to bind to the checkbox.
-        command:
-            Optional callback function for checkbox toggle.
-        variant:
-            Semantic role / colour variant (PRIMARY, SECONDARY, SUCCESS, WARNING, ERROR).
-        fg_colour:
-            Foreground colour family (overrides variant).
-        fg_shade:
-            Shade within the foreground family.
-        bg_colour:
-            Background colour family (overrides variant).
-        bg_shade_normal:
-            Shade for normal background state.
-        bg_shade_hover:
-            Shade for hover background state.
-        bg_shade_pressed:
-            Shade for pressed background state.
-        border_colour:
-            Border colour family.
-        border_shade:
-            Shade within the border family.
-        border_weight:
-            Border weight token.
-        padding:
-            Internal padding token.
-        relief:
-            Tcl/Tk relief style.
-        **kwargs:
-            Additional ttk.Checkbutton arguments.
+        parent: The parent widget.
+        text: Checkbox text content.
+        variable: Optional BooleanVar to bind.
+        command: Optional callback for toggle.
+        bg_colour: Background colour. If None, inherits from parent.
+        bg_shade: Background shade.
+        fg_colour: Foreground text colour token. Defaults to "BLACK".
+        size: Font size token.
+        bold: Whether the checkbox text is bold.
+        indent: Horizontal indent in pixels. Defaults to SPACING_SM (8px).
+        **kwargs: Additional ttk.Checkbutton arguments.
 
     Returns:
-        ttk.Checkbutton:
-            The created checkbox widget.
+        ttk.Checkbutton: The created checkbox widget.
 
     Raises:
-        KeyError:
-            If shade tokens are invalid for their colour families.
+        KeyError: If shade tokens are invalid for their colour families.
 
     Notes:
-        - Style resolved via button_style() with widget_type="CHECKBOX".
-        - Use variant for quick presets, or override with explicit colour params.
-        - Widget is NOT packed/gridded; caller must place it.
+        Widget is NOT packed/gridded; caller must place it.
     """
+    bg_colour_resolved = resolve_colour(bg_colour)
+    if bg_colour_resolved is not None and bg_shade is None:
+        bg_shade = cast(ShadeType, get_default_shade(bg_colour_resolved))
+
     style_name = button_style(
-        widget_type="CHECKBOX",
-        variant=variant,
-        fg_colour=fg_colour,
-        fg_shade=fg_shade,
-        bg_colour=bg_colour,
-        bg_shade_normal=bg_shade_normal,
-        bg_shade_hover=bg_shade_hover,
-        bg_shade_pressed=bg_shade_pressed,
-        border_colour=border_colour,
-        border_shade=border_shade,
-        border_weight=border_weight,
-        padding=padding,
-        relief=relief,
+        widget_type="CHECKBOX", variant="PRIMARY", fg_colour=fg_colour,
+        bg_colour=bg_colour_resolved, bg_shade_normal=bg_shade,
+        bg_shade_hover=bg_shade, bg_shade_pressed=bg_shade,
+        border_colour=None, border_shade=None, border_weight=None,
+        padding=(indent, 0), relief=None,
     )
+
     chk_kwargs: dict[str, Any] = {"text": text, "style": style_name, **kwargs}
     if variable is not None:
         chk_kwargs["variable"] = variable
@@ -1577,92 +992,53 @@ def make_radio(
     variable: tk.StringVar | tk.IntVar | None = None,
     value: str | int = "",
     command: Callable[[], None] | None = None,
-    variant: ControlVariantType = "PRIMARY",
-    fg_colour: ColourFamily | None = None,
-    fg_shade: ShadeType | TextShadeType = "BLACK",
-    bg_colour: ColourFamily | None = None,
-    bg_shade_normal: ShadeType | None = None,
-    bg_shade_hover: ShadeType | None = None,
-    bg_shade_pressed: ShadeType | None = None,
-    border_colour: ColourFamily | None = None,
-    border_shade: ShadeType | None = None,
-    border_weight: BorderWeightType | None = "THIN",
-    padding: SpacingType | None = "SM",
-    relief: str | None = None,
+    bg_colour: str | ColourFamily | None = None,
+    bg_shade: ShadeType | None = None,
+    fg_colour: TextColourType = "BLACK",
+    size: SizeType = "BODY",
+    bold: bool = False,
+    indent: int = SPACING_SM,
     **kwargs: Any,
 ) -> ttk.Radiobutton:
     """
-    Create a styled radio button. Use `variant` for presets (PRIMARY, SUCCESS, etc.), or override with explicit colours.
-
     Description:
-        Create a styled ttk.Radiobutton widget. Resolves style via G01f and applies it.
+        Create a styled ttk.Radiobutton widget. Indicator uses system defaults.
 
     Args:
-        parent:
-            The parent widget.
-        text:
-            Radio button text content.
-        variable:
-            Optional StringVar or IntVar to bind to the radio group.
-        value:
-            The value this radio button represents.
-        command:
-            Optional callback function for radio selection.
-        variant:
-            Semantic role / colour variant (PRIMARY, SECONDARY, SUCCESS, WARNING, ERROR).
-        fg_colour:
-            Foreground colour family (overrides variant).
-        fg_shade:
-            Shade within the foreground family.
-        bg_colour:
-            Background colour family (overrides variant).
-        bg_shade_normal:
-            Shade for normal background state.
-        bg_shade_hover:
-            Shade for hover background state.
-        bg_shade_pressed:
-            Shade for pressed background state.
-        border_colour:
-            Border colour family.
-        border_shade:
-            Shade within the border family.
-        border_weight:
-            Border weight token.
-        padding:
-            Internal padding token.
-        relief:
-            Tcl/Tk relief style.
-        **kwargs:
-            Additional ttk.Radiobutton arguments.
+        parent: The parent widget.
+        text: Radio button text content.
+        variable: Optional StringVar or IntVar for the radio group.
+        value: The value this radio button represents.
+        command: Optional callback for selection.
+        bg_colour: Background colour. If None, inherits from parent.
+        bg_shade: Background shade.
+        fg_colour: Foreground text colour token. Defaults to "BLACK".
+        size: Font size token.
+        bold: Whether the radio button text is bold.
+        indent: Horizontal indent in pixels. Defaults to SPACING_SM (8px).
+        **kwargs: Additional ttk.Radiobutton arguments.
 
     Returns:
-        ttk.Radiobutton:
-            The created radio button widget.
+        ttk.Radiobutton: The created radio button widget.
 
     Raises:
-        KeyError:
-            If shade tokens are invalid for their colour families.
+        KeyError: If shade tokens are invalid for their colour families.
 
     Notes:
-        - Style resolved via button_style() with widget_type="RADIO".
-        - Use variant for quick presets, or override with explicit colour params.
-        - Widget is NOT packed/gridded; caller must place it.
+        Widget is NOT packed/gridded; caller must place it.
     """
+    bg_colour_resolved = resolve_colour(bg_colour)
+    if bg_colour_resolved is not None and bg_shade is None:
+        bg_shade = cast(ShadeType, get_default_shade(bg_colour_resolved))
+
     style_name = button_style(
-        widget_type="RADIO",
-        variant=variant,
-        fg_colour=fg_colour,
-        fg_shade=fg_shade,
-        bg_colour=bg_colour,
-        bg_shade_normal=bg_shade_normal,
-        bg_shade_hover=bg_shade_hover,
-        bg_shade_pressed=bg_shade_pressed,
-        border_colour=border_colour,
-        border_shade=border_shade,
-        border_weight=border_weight,
-        padding=padding,
-        relief=relief,
+        widget_type="RADIO", variant="PRIMARY", fg_colour=fg_colour,
+        bg_colour=bg_colour_resolved, bg_shade_normal=bg_shade,
+        bg_shade_hover=bg_shade, bg_shade_pressed=bg_shade,
+        border_colour=None, border_shade=None, border_weight=None,
+        padding=(indent, 0), relief=None,
     )
+
     radio_kwargs: dict[str, Any] = {"text": text, "value": value, "style": style_name, **kwargs}
     if variable is not None:
         radio_kwargs["variable"] = variable
@@ -1676,60 +1052,12 @@ def make_separator(
     orient: Literal["horizontal", "vertical"] = "horizontal",
     **kwargs: Any,
 ) -> ttk.Separator:
-    """
-    Description:
-        Create a ttk.Separator widget (horizontal or vertical divider).
-
-    Args:
-        parent:
-            The parent widget.
-        orient:
-            Orientation of the separator.
-        **kwargs:
-            Additional ttk.Separator arguments.
-
-    Returns:
-        ttk.Separator:
-            The created separator widget.
-
-    Raises:
-        None.
-
-    Notes:
-        - No custom styling; uses default ttk.Separator style.
-        - Widget is NOT packed/gridded; caller must place it.
-    """
+    """Create a ttk.Separator widget (horizontal or vertical divider)."""
     return ttk.Separator(parent, orient=orient, **kwargs)
 
 
-def make_spacer(
-    parent: tk.Misc | tk.Widget,
-    width: int = 0,
-    height: int = 0,
-) -> ttk.Frame:
-    """
-    Description:
-        Create an invisible spacer frame with specified dimensions.
-
-    Args:
-        parent:
-            The parent widget.
-        width:
-            Width of the spacer in pixels.
-        height:
-            Height of the spacer in pixels.
-
-    Returns:
-        ttk.Frame:
-            An empty frame acting as a spacer.
-
-    Raises:
-        None.
-
-    Notes:
-        - Useful for adding explicit spacing in layouts.
-        - Widget is NOT packed/gridded; caller must place it.
-    """
+def make_spacer(parent: tk.Misc | tk.Widget, width: int = 0, height: int = 0) -> ttk.Frame:
+    """Create an invisible spacer frame with specified dimensions."""
     spacer = ttk.Frame(parent, width=width, height=height)
     spacer.pack_propagate(False)
     spacer.grid_propagate(False)
@@ -1741,75 +1069,160 @@ def make_textarea(
     width: int = 40,
     height: int = 10,
     wrap: Literal["none", "char", "word"] = "word",
+    bg_colour: str | ColourFamily | None = "SECONDARY",
+    bg_shade: ShadeType | None = "LIGHT",
+    fg_colour: TextColourType = "BLACK",
+    size: SizeType = "BODY",
+    font_family: str | None = None,
+    readonly: bool = False,
     **kwargs: Any,
 ) -> tk.Text:
     """
     Description:
-        Create a tk.Text widget for multiline text input.
+        Create a styled multiline text input widget using tk.Text.
 
     Args:
-        parent:
-            The parent widget.
-        width:
-            Width in characters.
-        height:
-            Height in lines.
-        wrap:
-            Text wrapping mode: "none", "char", or "word".
-        **kwargs:
-            Additional tk.Text arguments (font, bg, fg, etc.).
+        parent: The parent widget.
+        width: Width in characters.
+        height: Height in lines.
+        wrap: Text wrapping mode: "none", "char", or "word".
+        bg_colour: Background colour.
+        bg_shade: Background shade.
+        fg_colour: Foreground text colour token. Defaults to "BLACK".
+        size: Font size token.
+        font_family: Override font family. If None, uses GUI_FONT_FAMILY[0].
+        readonly: If True, widget is disabled (read-only).
+        **kwargs: Additional tk.Text arguments.
 
     Returns:
-        tk.Text:
-            The created text widget.
+        tk.Text: The created text widget.
 
     Raises:
-        None.
+        KeyError: If colour/shade tokens are invalid.
 
     Notes:
-        - Uses tk.Text (not ttk) as ttk has no Text widget.
-        - Widget is NOT packed/gridded; caller must place it.
+        For console/log output, use make_console() instead.
     """
-    return tk.Text(parent, width=width, height=height, wrap=wrap, **kwargs)
+    bg_colour_resolved = resolve_colour(bg_colour)
+
+    if bg_colour_resolved is not None and bg_shade is not None:
+        bg_hex = bg_colour_resolved[bg_shade]
+    else:
+        bg_hex = GUI_SECONDARY["LIGHT"]
+
+    fg_hex = TEXT_COLOURS.get(fg_colour, TEXT_COLOURS["BLACK"])
+    font_fam = font_family if font_family else GUI_FONT_FAMILY[0]
+    font_size = FONT_SIZES.get(size, FONT_SIZES["BODY"])
+
+    return tk.Text(
+        parent, width=width, height=height, wrap=wrap, bg=bg_hex, fg=fg_hex,
+        font=(font_fam, font_size), relief="flat",
+        state="disabled" if readonly else "normal", **kwargs,
+    )
+
+
+def make_console(
+    parent: tk.Misc | tk.Widget,
+    width: int = 80,
+    height: int = 10,
+    wrap: Literal["none", "char", "word"] = "word",
+    bg_colour: str | ColourFamily | None = "SECONDARY",
+    bg_shade: ShadeType | None = "DARK",
+    fg_colour: TextColourType = "WHITE",
+    size: SizeType = "SMALL",
+    font_family: str | None = None,
+    readonly: bool = True,
+    scrollbar: bool = True,
+    **kwargs: Any,
+) -> tk.Text:
+    """
+    Description:
+        Create a styled console/log output widget with monospace font.
+
+    Args:
+        parent: The parent widget.
+        width: Width in characters.
+        height: Height in lines.
+        wrap: Text wrapping mode. Defaults to "word".
+        bg_colour: Background colour. Defaults to "SECONDARY".
+        bg_shade: Background shade. Defaults to "DARK".
+        fg_colour: Foreground text colour token. Defaults to "WHITE".
+        size: Font size token. Defaults to "SMALL".
+        font_family: Override font family. If None, uses GUI_FONT_FAMILY_MONO[0].
+        readonly: If True, widget is read-only. Defaults to True.
+        scrollbar: If True, includes a vertical scrollbar. Defaults to True.
+        **kwargs: Additional tk.Text arguments.
+
+    Returns:
+        tk.Text: The created console widget with optional `.container` attribute.
+
+    Raises:
+        KeyError: If colour/shade tokens are invalid.
+
+    Notes:
+        If scrollbar=True, pack/grid the `.container`, not the text widget.
+    """
+    bg_colour_resolved = resolve_colour(bg_colour)
+
+    if bg_colour_resolved is not None and bg_shade is not None:
+        bg_hex = bg_colour_resolved[bg_shade]
+    else:
+        bg_hex = GUI_SECONDARY["DARK"]
+
+    fg_hex = TEXT_COLOURS.get(fg_colour, TEXT_COLOURS["WHITE"])
+    font_fam = font_family if font_family else GUI_FONT_FAMILY_MONO[0]
+    font_size = FONT_SIZES.get(size, FONT_SIZES["SMALL"])
+
+    if scrollbar:
+        container = tk.Frame(parent, bg=bg_hex)
+        text = tk.Text(
+            container, width=width, height=height, wrap=wrap, bg=bg_hex, fg=fg_hex,
+            font=(font_fam, font_size), relief="flat",
+            state="disabled" if readonly else "normal", **kwargs,
+        )
+        sb = ttk.Scrollbar(container, command=text.yview)
+        text.configure(yscrollcommand=sb.set)
+        sb.pack(side="right", fill="y")
+        text.pack(side="left", fill="both", expand=True)
+        text.container = container  # type: ignore[attr-defined]
+        return text
+    else:
+        return tk.Text(
+            parent, width=width, height=height, wrap=wrap, bg=bg_hex, fg=fg_hex,
+            font=(font_fam, font_size), relief="flat",
+            state="disabled" if readonly else "normal", **kwargs,
+        )
+
+
+# ====================================================================================================
+# 8. TREEVIEW PRIMITIVES
+# ====================================================================================================
 
 TREEVIEW_STYLES_INITIALISED = False
 
+
 def apply_treeview_styles() -> None:
-    """
-    Description:
-        Register Treeview styles using design-system colour tokens.
-
-    Args:
-        None.
-
-    Returns:
-        None.
-
-    Raises:
-        None.
-
-    Notes:
-        - Called lazily by make_treeview().
-        - Idempotent: executes once per process.
-    """
+    """Register Treeview styles using design-system colour tokens. Idempotent."""
     global TREEVIEW_STYLES_INITIALISED
     if TREEVIEW_STYLES_INITIALISED:
         return
 
     style = ttk.Style()
-
     style.configure(
         "Zebra.Treeview",
         rowheight=SPACING_MD * 2,
         background=GUI_SECONDARY["LIGHT"],
         fieldbackground=GUI_SECONDARY["LIGHT"],
-        foreground=GUI_TEXT["BLACK"],
-        borderwidth=0
+        foreground=TEXT_COLOURS["BLACK"],
+        borderwidth=BORDER_NONE,
     )
-
-    style.layout("Zebra.Treeview", [("Treeview.field", {"sticky": "nswe", "children": [("Treeview.treearea", {"sticky": "nswe"})]})])
-    style.map("Zebra.Treeview", background=[("selected", GUI_PRIMARY["MID"])], foreground=[("selected", GUI_TEXT["WHITE"])])
-
+    style.layout("Zebra.Treeview", [
+        ("Treeview.field", {"sticky": "nswe", "children": [("Treeview.treearea", {"sticky": "nswe"})]})
+    ])
+    style.map("Zebra.Treeview",
+        background=[("selected", GUI_PRIMARY["MID"])],
+        foreground=[("selected", TEXT_COLOURS["WHITE"])]
+    )
     TREEVIEW_STYLES_INITIALISED = True
 
 
@@ -1825,44 +1238,34 @@ def make_treeview(
         Create a styled Treeview using the design-system "Zebra.Treeview" style.
 
     Args:
-        parent:
-            Parent widget.
-        columns:
-            List of column identifiers.
-        show_headings:
-            Whether to show column headings.
-        height:
-            Number of visible rows.
-        selectmode:
-            Selection mode.
+        parent: Parent widget.
+        columns: List of column identifiers.
+        show_headings: Whether to show column headings.
+        height: Number of visible rows.
+        selectmode: Selection mode.
 
     Returns:
-        ttk.Treeview:
-            A fully styled Treeview.
+        ttk.Treeview: A fully styled Treeview.
+
+    Raises:
+        None.
 
     Notes:
-        - Styling lives entirely in apply_treeview_styles().
+        Styling lives entirely in apply_treeview_styles().
     """
     apply_treeview_styles()
     show_param = "headings" if show_headings else ""
-
-    tree = ttk.Treeview(
-        parent,
-        columns=columns,
-        show=show_param,
-        height=height,
-        selectmode=selectmode,
-        style="Zebra.Treeview",
-    )
-
-    return tree
+    return ttk.Treeview(parent, columns=columns, show=show_param, height=height,
+                        selectmode=selectmode, style="Zebra.Treeview")
 
 
 def make_zebra_treeview(
     parent: tk.Misc | tk.Widget,
     columns: list[str],
-    odd_bg: str = GUI_PRIMARY["LIGHT"],
-    even_bg: str = GUI_SECONDARY["LIGHT"],
+    odd_bg_colour: str | ColourFamily | None = "PRIMARY",
+    odd_bg_shade: ShadeType = "LIGHT",
+    even_bg_colour: str | ColourFamily | None = "SECONDARY",
+    even_bg_shade: ShadeType = "LIGHT",
     show_headings: bool = True,
     height: int = 10,
     selectmode: Literal["browse", "extended", "none"] = "browse",
@@ -1872,490 +1275,119 @@ def make_zebra_treeview(
         Create a styled Treeview with zebra striping preconfigured.
 
     Args:
-        parent:
-            Parent widget.
-        columns:
-            Column identifiers.
-        odd_bg:
-            Background for odd rows.
-        even_bg:
-            Background for even rows.
-        show_headings:
-            Whether to display headings.
-        height:
-            Number of visible rows.
-        selectmode:
-            Treeview selection mode.
+        parent: Parent widget.
+        columns: Column identifiers.
+        odd_bg_colour: Background colour for odd rows.
+        odd_bg_shade: Shade within the odd background colour family.
+        even_bg_colour: Background colour for even rows.
+        even_bg_shade: Shade within the even background colour family.
+        show_headings: Whether to display headings.
+        height: Number of visible rows.
+        selectmode: Treeview selection mode.
 
     Returns:
-        ttk.Treeview:
-            Ready-to-use zebra Treeview.
+        ttk.Treeview: Ready-to-use zebra Treeview.
 
     Raises:
         None.
 
     Notes:
-        - Tags "odd" and "even" are configured for use with insert_rows_zebra().
+        Tags "odd" and "even" are configured for use with insert_rows_zebra().
     """
-    tree = make_treeview(
-        parent,
-        columns=columns,
-        show_headings=show_headings,
-        height=height,
-        selectmode=selectmode,
-    )
+    tree = make_treeview(parent, columns=columns, show_headings=show_headings,
+                         height=height, selectmode=selectmode)
 
-    tree.tag_configure("odd", background=odd_bg)
-    tree.tag_configure("even", background=even_bg)
+    odd_colour_resolved = resolve_colour(odd_bg_colour)
+    even_colour_resolved = resolve_colour(even_bg_colour)
 
+    odd_bg_hex = odd_colour_resolved[odd_bg_shade] if odd_colour_resolved else GUI_PRIMARY["LIGHT"]
+    even_bg_hex = even_colour_resolved[even_bg_shade] if even_colour_resolved else GUI_SECONDARY["LIGHT"]
+
+    tree.tag_configure("odd", background=odd_bg_hex)
+    tree.tag_configure("even", background=even_bg_hex)
     return tree
 
+
 # ====================================================================================================
-# 8. TYPOGRAPHY PRIMITIVES
-# ----------------------------------------------------------------------------------------------------
-# Convenience factories for common typography patterns.
-# These combine make_label() with typical styling presets.
+# 9. TYPOGRAPHY PRIMITIVES
 # ====================================================================================================
 
-def page_title(
-    parent: tk.Misc | tk.Widget,
-    text: str,
-    fg_colour: ColourFamily | None = None,
-    fg_shade: ShadeType | TextShadeType = "BLACK",
-    **kwargs: Any,
-) -> ttk.Label:
-    """
-    Create a large, bold page title (DISPLAY size). Use `fg_colour`/`fg_shade` to customise colour.
-
-    Description:
-        Create a page title label with DISPLAY size and bold weight.
-
-    Args:
-        parent:
-            The parent widget.
-        text:
-            Title text content.
-        fg_colour:
-            Foreground colour family (defaults to GUI_TEXT).
-        fg_shade:
-            Shade within the foreground family.
-        **kwargs:
-            Additional ttk.Label arguments.
-
-    Returns:
-        ttk.Label:
-            The created title label.
-
-    Raises:
-        KeyError:
-            If fg_shade is invalid for the colour family.
-
-    Notes:
-        - Uses DISPLAY size with bold=True.
-        - Widget is NOT packed/gridded; caller must place it.
-    """
-    # Note: If no fg_colour is provided (default), shade "DARK" is invalid (should be "BLACK").
-    # If fg_colour IS provided (e.g. PRIMARY), "DARK" is valid.
-    # The fix here assumes the caller wants the standard text colour if fg_colour is None.
-    # To be safe given the mismatch between brand shades (DARK) and text shades (BLACK),
-    # we should check if we are using the default text family.
-    
-    # However, to be consistent with the signature update:
-    if fg_colour is None and fg_shade == "DARK":
-         fg_shade = "BLACK"
-
-    return make_label(
-        parent=parent,
-        text=text,
-        fg_colour=fg_colour,
-        fg_shade=fg_shade,
-        size="DISPLAY",
-        bold=True,
-        **kwargs,
-    )
+def page_title(parent: tk.Misc | tk.Widget, text: str, fg_colour: TextColourType = "BLACK", **kwargs: Any) -> ttk.Label:
+    """Create a large, bold page title (DISPLAY size). Forwards to make_label()."""
+    return make_label(parent=parent, text=text, fg_colour=fg_colour, size="DISPLAY", bold=True, **kwargs)
 
 
-def section_title(
-    parent: tk.Misc | tk.Widget,
-    text: str,
-    fg_colour: ColourFamily | None = None,
-    fg_shade: ShadeType | TextShadeType = "DARK", # UPDATED: Default from DARK to BLACK
-    **kwargs: Any,
-) -> ttk.Label:
-    """
-    Create a bold section heading (HEADING size). Use `fg_colour`/`fg_shade` to customise colour.
-
-    Description:
-        Create a section title label with HEADING size and bold weight.
-
-    Args:
-        parent:
-            The parent widget.
-        text:
-            Title text content.
-        fg_colour:
-            Foreground colour family (defaults to GUI_TEXT).
-        fg_shade:
-            Shade within the foreground family.
-        **kwargs:
-            Additional ttk.Label arguments.
-
-    Returns:
-        ttk.Label:
-            The created title label.
-
-    Raises:
-        KeyError:
-            If fg_shade is invalid for the colour family.
-
-    Notes:
-        - Uses HEADING size with bold=True.
-        - Widget is NOT packed/gridded; caller must place it.
-    """
-    if fg_colour is None and fg_shade == "DARK":
-         fg_shade = "BLACK"
-
-    return make_label(
-        parent=parent,
-        text=text,
-        fg_colour=fg_colour,
-        fg_shade=fg_shade,
-        size="HEADING",
-        bold=True,
-        **kwargs,
-    )
+def section_title(parent: tk.Misc | tk.Widget, text: str, fg_colour: TextColourType = "BLACK", **kwargs: Any) -> ttk.Label:
+    """Create a bold section heading (HEADING size). Forwards to make_label()."""
+    return make_label(parent=parent, text=text, fg_colour=fg_colour, size="HEADING", bold=True, **kwargs)
 
 
-def page_subtitle(
-    parent: tk.Misc | tk.Widget,
-    text: str,
-    fg_colour: ColourFamily | None = None,
-    fg_shade: ShadeType | TextShadeType = "GREY",
-    **kwargs: Any,
-) -> ttk.Label:
-    """
-    Description:
-        Create a page subtitle label with TITLE size and normal weight.
-        Uses muted colour by default for visual hierarchy below page_title.
-
-    Args:
-        parent:
-            The parent widget.
-        text:
-            Subtitle text content.
-        fg_colour:
-            Foreground colour family (defaults to GUI_TEXT).
-        fg_shade:
-            Shade within the foreground family (defaults to GREY).
-        **kwargs:
-            Additional ttk.Label arguments.
-
-    Returns:
-        ttk.Label:
-            The created subtitle label.
-
-    Raises:
-        KeyError:
-            If fg_shade is invalid for the colour family.
-
-    Notes:
-        - Uses TITLE size with bold=False.
-        - Default GREY shade provides visual hierarchy below page_title.
-        Default GREY shade is from the TEXT colour family.
-        - Widget is NOT packed/gridded; caller must place it.
-    """
-    return make_label(
-        parent=parent,
-        text=text,
-        fg_colour=fg_colour,
-        fg_shade=fg_shade,
-        size="TITLE",
-        bold=False,
-        **kwargs,
-    )
+def page_subtitle(parent: tk.Misc | tk.Widget, text: str, fg_colour: TextColourType = "GREY", **kwargs: Any) -> ttk.Label:
+    """Create a page subtitle (TITLE size, muted colour). Forwards to make_label()."""
+    return make_label(parent=parent, text=text, fg_colour=fg_colour, size="TITLE", bold=False, **kwargs)
 
 
-def body_text(
-    parent: tk.Misc | tk.Widget,
-    text: str,
-    fg_colour: ColourFamily | None = None,
-    fg_shade: ShadeType | TextShadeType = "BLACK", # UPDATED: Default from DARK to BLACK
-    **kwargs: Any,
-) -> ttk.Label:
-    """
-    Create standard body text (BODY size). Use `fg_colour`/`fg_shade` to customise colour.
-
-    Description:
-        Create a body text label with BODY size and normal weight.
-
-    Args:
-        parent:
-            The parent widget.
-        text:
-            Body text content.
-        fg_colour:
-            Foreground colour family (defaults to GUI_TEXT).
-        fg_shade:
-            Shade within the foreground family.
-        **kwargs:
-            Additional ttk.Label arguments.
-
-    Returns:
-        ttk.Label:
-            The created body label.
-
-    Raises:
-        KeyError:
-            If fg_shade is invalid for the colour family.
-
-    Notes:
-        - Uses BODY size with bold=False.
-        - Widget is NOT packed/gridded; caller must place it.
-    """
-    if fg_colour is None and fg_shade == "DARK":
-         fg_shade = "BLACK"
-
-    return make_label(
-        parent=parent,
-        text=text,
-        fg_colour=fg_colour,
-        fg_shade=fg_shade,
-        size="BODY",
-        bold=False,
-        **kwargs,
-    )
+def body_text(parent: tk.Misc | tk.Widget, text: str, fg_colour: TextColourType = "BLACK", **kwargs: Any) -> ttk.Label:
+    """Create standard body text (BODY size). Forwards to make_label()."""
+    return make_label(parent=parent, text=text, fg_colour=fg_colour, size="BODY", bold=False, **kwargs)
 
 
-def small_text(
-    parent: tk.Misc | tk.Widget,
-    text: str,
-    fg_colour: ColourFamily | None = None,
-    fg_shade: ShadeType | TextShadeType = "BLACK", # UPDATED: Default from DARK to BLACK
-    **kwargs: Any,
-) -> ttk.Label:
-    """
-    Create small caption text (SMALL size). Ideal for hints, captions, or secondary info.
-
-    Description:
-        Create a small text label with SMALL size and normal weight.
-
-    Args:
-        parent:
-            The parent widget.
-        text:
-            Small text content (captions, hints, meta).
-        fg_colour:
-            Foreground colour family (defaults to GUI_TEXT).
-        fg_shade:
-            Shade within the foreground family.
-        **kwargs:
-            Additional ttk.Label arguments.
-
-    Returns:
-        ttk.Label:
-            The created small label.
-
-    Raises:
-        KeyError:
-            If fg_shade is invalid for the colour family.
-
-    Notes:
-        - Uses SMALL size with bold=False.
-        - Widget is NOT packed/gridded; caller must place it.
-    """
-    if fg_colour is None and fg_shade == "DARK":
-         fg_shade = "BLACK"
-
-    return make_label(
-        parent=parent,
-        text=text,
-        fg_colour=fg_colour,
-        fg_shade=fg_shade,
-        size="SMALL",
-        bold=False,
-        **kwargs,
-    )
+def small_text(parent: tk.Misc | tk.Widget, text: str, fg_colour: TextColourType = "BLACK", **kwargs: Any) -> ttk.Label:
+    """Create small caption text (SMALL size). Forwards to make_label()."""
+    return make_label(parent=parent, text=text, fg_colour=fg_colour, size="SMALL", bold=False, **kwargs)
 
 
-def meta_text(
-    parent: tk.Misc | tk.Widget,
-    text: str,
-    fg_colour: ColourFamily | None = None,
-    fg_shade: ShadeType | TextShadeType = "GREY", # UPDATED: Default from MUTED/MID to GREY
-    **kwargs: Any,
-) -> ttk.Label:
-    """
-    Create muted metadata text (SMALL size, GREY). Ideal for timestamps, versions, IDs.
-
-    Description:
-        Create a meta text label with SMALL size and muted colour.
-        Ideal for timestamps, author names, version info, and other metadata.
-
-    Args:
-        parent:
-            The parent widget.
-        text:
-            Meta text content (timestamps, IDs, versions, etc.).
-        fg_colour:
-            Foreground colour family (defaults to GUI_TEXT).
-        fg_shade:
-            Shade within the foreground family (defaults to GREY).
-        **kwargs:
-            Additional ttk.Label arguments.
-
-    Returns:
-        ttk.Label:
-            The created meta label.
-
-    Raises:
-        KeyError:
-            If fg_shade is invalid for the colour family.
-
-    Notes:
-        - Uses SMALL size with bold=False and GREY colour.
-        - Designed for secondary information like timestamps, IDs, versions.
-        - Default GREY shade is from the TEXT colour family.
-        - Widget is NOT packed/gridded; caller must place it.
-    """
-    return make_label(
-        parent=parent,
-        text=text,
-        fg_colour=fg_colour,
-        fg_shade=fg_shade,
-        size="SMALL",
-        bold=False,
-        **kwargs,
-    )
+def meta_text(parent: tk.Misc | tk.Widget, text: str, fg_colour: TextColourType = "GREY", **kwargs: Any) -> ttk.Label:
+    """Create muted metadata text (SMALL size, GREY). Forwards to make_label()."""
+    return make_label(parent=parent, text=text, fg_colour=fg_colour, size="SMALL", bold=False, **kwargs)
 
 
-def divider(
-    parent: tk.Misc | tk.Widget,
-    orient: Literal["horizontal", "vertical"] = "horizontal",
-    **kwargs: Any,
-) -> ttk.Separator:
-    """
-    Description:
-        Create a visual divider line. Alias for make_separator().
-
-    Args:
-        parent:
-            The parent widget.
-        orient:
-            Orientation of the divider.
-        **kwargs:
-            Additional ttk.Separator arguments.
-
-    Returns:
-        ttk.Separator:
-            The created separator widget.
-
-    Raises:
-        None.
-
-    Notes:
-        - Convenience alias for make_separator().
-        - Widget is NOT packed/gridded; caller must place it.
-    """
+def divider(parent: tk.Misc | tk.Widget, orient: Literal["horizontal", "vertical"] = "horizontal", **kwargs: Any) -> ttk.Separator:
+    """Create a visual divider line. Alias for make_separator()."""
     return make_separator(parent=parent, orient=orient, **kwargs)
 
 
 # ====================================================================================================
-# 8. PUBLIC API
-# ----------------------------------------------------------------------------------------------------
-# Expose all widget primitive wrappers and factory functions.
+# 10. PUBLIC API
 # ====================================================================================================
 
 __all__ = [
-    # Type aliases (re-exported from G01b for G03 consumption)
-    "ShadeType",
-    "TextShadeType",
-    "SizeType",
-    "ColourFamily",
-    "BorderWeightType",
-    "SpacingType",
-    "ContainerRoleType",
-    "ContainerKindType",
-    "InputControlType",
-    "InputRoleType",
-    "ControlWidgetType",
-    "ControlVariantType",
-    # Spacing tokens (re-exported from G01a for G03 consumption)
-    "SPACING_XS",
-    "SPACING_SM",
-    "SPACING_MD",
-    "SPACING_LG",
-    "SPACING_XL",
-    "SPACING_XXL",
+    # Type aliases
+    "ShadeType", "TextColourType", "SizeType", "ColourFamily", "BorderWeightType", "SpacingType",
+    "ContainerRoleType", "ContainerKindType", "InputControlType", "InputRoleType",
+    "ControlWidgetType", "ControlVariantType",
+    # Colour utilities
+    "resolve_colour", "get_default_shade",
+    # Spacing tokens
+    "SPACING_XS", "SPACING_SM", "SPACING_MD", "SPACING_LG", "SPACING_XL", "SPACING_XXL",
     # Theme initialisation
     "init_gui_theme",
     # Text/Label styles
-    "label_style",
-    "label_style_heading",
-    "label_style_body",
-    "label_style_small",
-    "label_style_error",
-    "label_style_success",
-    "label_style_warning",
+    "label_style", "label_style_heading", "label_style_body", "label_style_small",
+    "label_style_error", "label_style_success", "label_style_warning",
     # Container/Frame styles
-    "frame_style",
-    "frame_style_card",
-    "frame_style_panel",
-    "frame_style_section",
-    "frame_style_surface",
+    "frame_style", "frame_style_card", "frame_style_panel", "frame_style_section", "frame_style_surface",
     # Input styles
-    "entry_style",
-    "entry_style_default",
-    "entry_style_error",
-    "entry_style_success",
-    "combobox_style_default",
-    "spinbox_style_default",
+    "entry_style", "entry_style_default", "entry_style_error", "entry_style_success",
+    "combobox_style_default", "spinbox_style_default",
     # Control styles
-    "button_style",
-    "button_primary",
-    "button_secondary",
-    "button_success",
-    "button_warning",
-    "button_error",
-    "checkbox_primary",
-    "checkbox_success",
-    "radio_primary",
-    "radio_warning",
-    "switch_primary",
-    "switch_error",
+    "button_style", "button_primary", "button_secondary", "button_success", "button_warning", "button_error",
+    "checkbox_primary", "checkbox_success", "radio_primary", "radio_warning", "switch_primary", "switch_error",
     # Debug utilities
     "debug_dump_button_styles",
     # Widget factories
-    "make_label",
-    "make_frame",
-    "make_entry",
-    "make_combobox",
-    "make_spinbox",
-    "make_button",
-    "make_checkbox",
-    "make_radio",
-    "make_separator",
-    "make_spacer",
-    "make_textarea",
+    "make_label", "make_status_label", "StatusLabel", "make_frame", "make_entry", "make_combobox",
+    "make_spinbox", "make_button", "make_checkbox", "make_radio", "make_separator", "make_spacer",
+    "make_textarea", "make_console",
     # Treeview primitives
-    "apply_treeview_styles",
-    "make_treeview",
-    "make_zebra_treeview",
+    "apply_treeview_styles", "make_treeview", "make_zebra_treeview",
     # Typography primitives
-    "page_title",
-    "page_subtitle",
-    "section_title",
-    "body_text",
-    "small_text",
-    "meta_text",
-    "divider",
+    "page_title", "page_subtitle", "section_title", "body_text", "small_text", "meta_text", "divider",
 ]
 
 
 # ====================================================================================================
-# 9. SELF-TEST
-# ----------------------------------------------------------------------------------------------------
-# Minimal smoke test demonstrating that the module imports correctly
-# and key public functions can execute without error.
+# 11. SELF-TEST
 # ====================================================================================================
 
 if __name__ == "__main__":
@@ -2363,7 +1395,7 @@ if __name__ == "__main__":
     logger.info("[G02a] Running G02a_widget_primitives smoke test...")
 
     root = tk.Tk()
-    init_gui_theme()  # CRITICAL: Call immediately after creating root
+    init_gui_theme()
     root.title("G02a Widget Primitives — Smoke Test")
     root.withdraw()
 
@@ -2397,62 +1429,53 @@ if __name__ == "__main__":
         logger.info("button_error() → %s", style_btn_error)
 
         # Test widget factories
-        root.deiconify()  # Show window for factory tests
+        root.deiconify()
 
         test_frame = ttk.Frame(root, padding=10)
         test_frame.pack(fill="both", expand=True)
 
-        # make_label
-        lbl = make_label(test_frame, text="Test Label (BODY)", size="BODY")
+        lbl = make_label(test_frame, text="Test Label (BLACK)", fg_colour="BLACK")
         lbl.pack(anchor="w", pady=2)
-        logger.info("make_label() created successfully")
 
-        # make_frame
-        frm = make_frame(test_frame, role="SECONDARY", kind="CARD")
+        lbl_primary = make_label(test_frame, text="Primary Text", fg_colour="PRIMARY")
+        lbl_primary.pack(anchor="w", pady=2)
+
+        lbl_error = make_label(test_frame, text="Error Text", fg_colour="ERROR")
+        lbl_error.pack(anchor="w", pady=2)
+        logger.info("make_label() variations created successfully")
+
+        frm = make_frame(test_frame, bg_colour="SECONDARY")
         frm.pack(fill="x", pady=5)
-        ttk.Label(frm, text="Inside make_frame()").pack(padx=10, pady=10)
+        ttk.Label(frm.content, text="Inside make_frame()").pack(padx=10, pady=10)  # type: ignore[attr-defined]
         logger.info("make_frame() created successfully")
 
-        # make_entry
         entry = make_entry(test_frame)
         entry.insert(0, "Test Entry")
         entry.pack(fill="x", pady=2)
         logger.info("make_entry() created successfully")
 
-        # make_button
-        btn = make_button(test_frame, text="Test Button", variant="PRIMARY")
+        btn = make_button(test_frame, text="Test Button", bg_colour="PRIMARY", fg_colour="WHITE")
         btn.pack(anchor="w", pady=2)
         logger.info("make_button() created successfully")
 
-        # make_separator
         sep = make_separator(test_frame)
         sep.pack(fill="x", pady=5)
         logger.info("make_separator() created successfully")
 
-        # make_spacer
         spacer = make_spacer(test_frame, height=10)
         spacer.pack()
         logger.info("make_spacer() created successfully")
 
-        # make_checkbox
         chk_var = tk.BooleanVar(value=True)
         chk = make_checkbox(test_frame, text="Test Checkbox", variable=chk_var)
         chk.pack(anchor="w", pady=2)
         logger.info("make_checkbox() created successfully")
 
-        # make_radio
         radio_var = tk.StringVar(value="opt1")
         radio = make_radio(test_frame, text="Test Radio", variable=radio_var, value="opt1")
         radio.pack(anchor="w", pady=2)
         logger.info("make_radio() created successfully")
 
-        # make_textarea
-        textarea = make_textarea(test_frame, width=30, height=3)
-        textarea.insert("1.0", "Test textarea content")
-        textarea.pack(fill="x", pady=2)
-        logger.info("make_textarea() created successfully")
-
-        # Typography primitives
         div = divider(test_frame)
         div.pack(fill="x", pady=5)
         logger.info("divider() created successfully")
@@ -2460,6 +1483,10 @@ if __name__ == "__main__":
         title = page_title(test_frame, text="Page Title")
         title.pack(anchor="w", pady=2)
         logger.info("page_title() created successfully")
+
+        subtitle = page_subtitle(test_frame, text="Page Subtitle")
+        subtitle.pack(anchor="w", pady=2)
+        logger.info("page_subtitle() created successfully")
 
         sec_title = section_title(test_frame, text="Section Title")
         sec_title.pack(anchor="w", pady=2)
@@ -2473,10 +1500,38 @@ if __name__ == "__main__":
         small.pack(anchor="w", pady=2)
         logger.info("small_text() created successfully")
 
-        logger.info("[G02a] All smoke tests passed.")
+        meta = meta_text(test_frame, text="Meta: v1.0.0 | Updated: 2025-01-01")
+        meta.pack(anchor="w", pady=2)
+        logger.info("meta_text() created successfully")
 
-        # Brief visual display
-        root.after(2000, root.destroy)
+        status = make_status_label(test_frame, text_ok="Connected", text_error="Disconnected")
+        status.pack(anchor="w", pady=2)
+        status.set_ok()
+        logger.info("make_status_label() created successfully")
+
+        textarea = make_textarea(test_frame, width=40, height=3)
+        textarea.insert("1.0", "Textarea input test...")
+        textarea.pack(fill="x", pady=2)
+        logger.info("make_textarea() created successfully")
+
+        console = make_console(test_frame, width=40, height=3)
+        console.configure(state="normal")
+        console.insert("1.0", "Console output test...")
+        console.configure(state="disabled")
+        console.container.pack(fill="x", pady=2)  # type: ignore[attr-defined]
+        logger.info("make_console() created successfully")
+
+        combo_var = tk.StringVar(value="Option 1")
+        combo = make_combobox(test_frame, textvariable=combo_var, values=["Option 1", "Option 2", "Option 3"])
+        combo.pack(fill="x", pady=2)
+        logger.info("make_combobox() created successfully")
+
+        spin_var = tk.StringVar(value="50")
+        spin = make_spinbox(test_frame, textvariable=spin_var, from_=0, to=100)
+        spin.pack(fill="x", pady=2)
+        logger.info("make_spinbox() created successfully")
+
+        logger.info("[G02a] All smoke tests passed.")
         root.mainloop()
 
     except Exception as exc:

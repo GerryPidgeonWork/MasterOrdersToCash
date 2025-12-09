@@ -1,5 +1,5 @@
 # ====================================================================================================
-# G04c_app_menu.py
+# G04c_app_menu.py                                                                       [v1.0.0]
 # ----------------------------------------------------------------------------------------------------
 # Application menu bar for the GUI framework.
 #
@@ -9,21 +9,10 @@
 #   - Bind global keyboard accelerators.
 #   - Support customisation via menu item registration.
 #
-# Relationships:
-#   - G04a_app_state  → Reads app state (theme, debug mode).
-#   - G04b_navigator  → Calls navigate(), back(), forward(), reload().
-#   - G04d_app_shell  → Creates and owns the AppMenu instance.
-#
-# Design principles:
-#   - Menu bar is pure UI behaviour — no business logic.
-#   - Does not create widgets other than tk.Menu (menus are not part of design system).
-#   - All navigation delegated to Navigator.
-#   - Keyboard shortcuts bound via root.bind_all().
-#
 # ----------------------------------------------------------------------------------------------------
 # Author:       Gerry Pidgeon
-# Created:      2025-12-07
-# Project:      GUI Framework v1.0 - G04 Application Infrastructure
+# Created:      2025-12-12
+# Project:      SimpleTk v1.0
 # ====================================================================================================
 
 
@@ -74,19 +63,13 @@ from core.C03_logging_handler import get_logger, log_exception, init_logging
 logger = get_logger(__name__)
 
 # --- Additional project-level imports (append below this line only) ----------------------------------
-# GUI packages - tk.Menu is used directly (menus are not part of design system)
 from gui.G00a_gui_packages import tk, messagebox
-
-# G04 dependencies
 from gui.G04a_app_state import AppState
 from gui.G04b_navigator import Navigator
 
 
 # ====================================================================================================
 # 3. CONFIGURATION
-# ----------------------------------------------------------------------------------------------------
-# Default application metadata for About dialog.
-# Can be overridden via AppMenu constructor.
 # ====================================================================================================
 
 DEFAULT_APP_NAME = "GUI Framework Application"
@@ -97,39 +80,14 @@ DEFAULT_APP_YEAR = "2025"
 
 # ====================================================================================================
 # 4. APP MENU CLASS
-# ----------------------------------------------------------------------------------------------------
+# ====================================================================================================
 
 class AppMenu:
     """
-    Description:
-        Standard application menu bar with File, View, and Help menus.
-        Integrates with Navigator for navigation commands and binds
-        global keyboard accelerators.
+    Standard application menu bar with File, View, and Help menus.
 
-    Args:
-        root:
-            The root Tk window to attach the menu to.
-        navigator:
-            The Navigator instance for page navigation.
-        app_state:
-            The AppState instance for reading application state.
-        app_name:
-            Application name for About dialog.
-        app_version:
-            Application version for About dialog.
-        app_author:
-            Application author for About dialog.
-
-    Returns:
-        None.
-
-    Raises:
-        None.
-
-    Notes:
-        - Menu attaches via root.config(menu=...).
-        - Shortcuts bind globally using root.bind_all().
-        - Home page navigation requires "home" to be registered.
+    Integrates with Navigator for navigation commands and binds global
+    keyboard accelerators. Menu attaches via root.config(menu=...).
     """
 
     def __init__(
@@ -146,18 +104,12 @@ class AppMenu:
             Initialise the menu bar and attach it to the root window.
 
         Args:
-            root:
-                The root Tk window.
-            navigator:
-                The Navigator instance.
-            app_state:
-                The AppState instance.
-            app_name:
-                Application name for About dialog.
-            app_version:
-                Application version for About dialog.
-            app_author:
-                Application author for About dialog.
+            root: The root Tk window.
+            navigator: The Navigator instance.
+            app_state: The AppState instance.
+            app_name: Application name for About dialog.
+            app_version: Application version for About dialog.
+            app_author: Application author for About dialog.
 
         Returns:
             None.
@@ -166,7 +118,7 @@ class AppMenu:
             None.
 
         Notes:
-            - Builds all menus and binds shortcuts automatically.
+            Builds all menus and binds shortcuts automatically.
         """
         self._root = root
         self._navigator = navigator
@@ -175,17 +127,13 @@ class AppMenu:
         self._app_version = app_version
         self._app_author = app_author
 
-        # Build menu bar
         self._menubar = tk.Menu(self._root)
 
         self._file_menu = self._build_file_menu()
         self._view_menu = self._build_view_menu()
         self._help_menu = self._build_help_menu()
 
-        # Attach to window
         self._root.config(menu=self._menubar)
-
-        # Bind keyboard shortcuts
         self._bind_shortcuts()
 
         logger.info("[G04c] AppMenu initialised.")
@@ -195,23 +143,7 @@ class AppMenu:
     # ------------------------------------------------------------------------------------------------
 
     def _build_file_menu(self) -> tk.Menu:
-        """
-        Description:
-            Build the File menu with Exit command.
-
-        Args:
-            None.
-
-        Returns:
-            tk.Menu:
-                The File menu instance.
-
-        Raises:
-            None.
-
-        Notes:
-            - Exit: Ctrl+Q
-        """
+        """Build the File menu with Exit command (Ctrl+Q)."""
         file_menu = tk.Menu(self._menubar, tearoff=False)
 
         file_menu.add_command(
@@ -229,26 +161,7 @@ class AppMenu:
     # ------------------------------------------------------------------------------------------------
 
     def _build_view_menu(self) -> tk.Menu:
-        """
-        Description:
-            Build the View menu with navigation commands.
-
-        Args:
-            None.
-
-        Returns:
-            tk.Menu:
-                The View menu instance.
-
-        Raises:
-            None.
-
-        Notes:
-            - Home: Ctrl+H
-            - Back: Alt+Left
-            - Forward: Alt+Right
-            - Reload: Ctrl+R
-        """
+        """Build the View menu with navigation commands."""
         view_menu = tk.Menu(self._menubar, tearoff=False)
 
         view_menu.add_command(
@@ -288,23 +201,7 @@ class AppMenu:
     # ------------------------------------------------------------------------------------------------
 
     def _build_help_menu(self) -> tk.Menu:
-        """
-        Description:
-            Build the Help menu with About command.
-
-        Args:
-            None.
-
-        Returns:
-            tk.Menu:
-                The Help menu instance.
-
-        Raises:
-            None.
-
-        Notes:
-            - About dialog shows app name, version, and author.
-        """
+        """Build the Help menu with About command."""
         help_menu = tk.Menu(self._menubar, tearoff=False)
 
         help_menu.add_command(
@@ -321,28 +218,10 @@ class AppMenu:
     # ------------------------------------------------------------------------------------------------
 
     def _bind_shortcuts(self) -> None:
-        """
-        Description:
-            Bind global keyboard accelerators.
-
-        Args:
-            None.
-
-        Returns:
-            None.
-
-        Raises:
-            None.
-
-        Notes:
-            - Tkinter menus do not automatically bind accelerators.
-            - We use bind_all() for global shortcuts.
-        """
-        # File menu
+        """Bind global keyboard accelerators using bind_all()."""
         self._root.bind_all("<Control-q>", lambda e: self._on_exit())
         self._root.bind_all("<Control-Q>", lambda e: self._on_exit())
 
-        # View menu - navigation
         self._root.bind_all("<Control-h>", lambda e: self._on_home())
         self._root.bind_all("<Control-H>", lambda e: self._on_home())
 
@@ -359,42 +238,12 @@ class AppMenu:
     # ------------------------------------------------------------------------------------------------
 
     def _on_exit(self) -> None:
-        """
-        Description:
-            Handle Exit command.
-
-        Args:
-            None.
-
-        Returns:
-            None.
-
-        Raises:
-            None.
-
-        Notes:
-            - Quits the application.
-        """
+        """Handle Exit command — quit the application."""
         logger.info("[G04c] Exit command triggered.")
         self._root.quit()
 
     def _on_home(self) -> None:
-        """
-        Description:
-            Handle Home command - navigate to home page.
-
-        Args:
-            None.
-
-        Returns:
-            None.
-
-        Raises:
-            None.
-
-        Notes:
-            - Silently ignores if "home" page is not registered.
-        """
+        """Handle Home command — navigate to home page if registered."""
         logger.info("[G04c] Home command triggered.")
         if self._navigator.is_registered("home"):
             self._navigator.navigate("home")
@@ -402,82 +251,22 @@ class AppMenu:
             logger.warning("[G04c] Home page not registered.")
 
     def _on_back(self) -> None:
-        """
-        Description:
-            Handle Back command - navigate to previous page in history.
-
-        Args:
-            None.
-
-        Returns:
-            None.
-
-        Raises:
-            None.
-
-        Notes:
-            - Does nothing if at start of history.
-        """
+        """Handle Back command — navigate to previous page in history."""
         logger.info("[G04c] Back command triggered.")
         self._navigator.back()
 
     def _on_forward(self) -> None:
-        """
-        Description:
-            Handle Forward command - navigate to next page in history.
-
-        Args:
-            None.
-
-        Returns:
-            None.
-
-        Raises:
-            None.
-
-        Notes:
-            - Does nothing if at end of history.
-        """
+        """Handle Forward command — navigate to next page in history."""
         logger.info("[G04c] Forward command triggered.")
         self._navigator.forward()
 
     def _on_reload(self) -> None:
-        """
-        Description:
-            Handle Reload command - reload current page.
-
-        Args:
-            None.
-
-        Returns:
-            None.
-
-        Raises:
-            None.
-
-        Notes:
-            - Forces page recreation (bypasses cache).
-        """
+        """Handle Reload command — reload current page bypassing cache."""
         logger.info("[G04c] Reload command triggered.")
         self._navigator.reload()
 
     def _on_about(self) -> None:
-        """
-        Description:
-            Handle About command - show About dialog.
-
-        Args:
-            None.
-
-        Returns:
-            None.
-
-        Raises:
-            None.
-
-        Notes:
-            - Uses tkinter messagebox for simplicity.
-        """
+        """Handle About command — show About dialog."""
         logger.info("[G04c] About command triggered.")
         about_text = (
             f"{self._app_name}\n"
@@ -496,18 +285,16 @@ class AppMenu:
             Add a custom menu to the menu bar.
 
         Args:
-            label:
-                The menu label (e.g., "Tools", "Window").
+            label: The menu label (e.g., "Tools", "Window").
 
         Returns:
-            tk.Menu:
-                The created menu for adding commands.
+            tk.Menu: The created menu for adding commands.
 
         Raises:
             None.
 
         Notes:
-            - Returns the menu so caller can add commands.
+            Returns the menu so caller can add commands.
         """
         menu = tk.Menu(self._menubar, tearoff=False)
         self._menubar.add_cascade(label=label, menu=menu)
@@ -522,15 +309,12 @@ class AppMenu:
     ) -> None:
         """
         Description:
-            Add a command to the File menu.
+            Add a command to the File menu before Exit.
 
         Args:
-            label:
-                The command label.
-            command:
-                The callback function.
-            accelerator:
-                Optional keyboard shortcut display text.
+            label: The command label.
+            command: The callback function.
+            accelerator: Optional keyboard shortcut display text.
 
         Returns:
             None.
@@ -539,10 +323,8 @@ class AppMenu:
             None.
 
         Notes:
-            - Inserts before Exit command.
-            - Caller must bind accelerator manually if needed.
+            Caller must bind accelerator manually if needed.
         """
-        # Insert before Exit (which is the last item)
         index = self._file_menu.index("end") or 0
         self._file_menu.insert_command(
             index,
@@ -555,7 +337,7 @@ class AppMenu:
 
 # ====================================================================================================
 # 5. PUBLIC API
-# ----------------------------------------------------------------------------------------------------
+# ====================================================================================================
 
 __all__ = [
     "AppMenu",
@@ -568,8 +350,6 @@ __all__ = [
 
 # ====================================================================================================
 # 6. SELF-TEST
-# ----------------------------------------------------------------------------------------------------
-# Note: This test requires a Tk root window, so it will open a GUI briefly.
 # ====================================================================================================
 
 if __name__ == "__main__":
@@ -579,8 +359,6 @@ if __name__ == "__main__":
     logger.info("=" * 60)
 
     from gui.G03f_renderer import G03Renderer
-
-    # ----- Mock classes for testing -----
 
     class MockFrame:
         """Mock frame for testing."""
@@ -602,26 +380,21 @@ if __name__ == "__main__":
         def build(self, parent: Any, params: Dict[str, Any]) -> MockFrame:
             return MockFrame()
 
-    # ----- Run test -----
-
     root: tk.Tk | None = None
     try:
-        # Create real Tk root
         root = tk.Tk()
         root.title("G04c AppMenu Test")
         root.geometry("400x300")
 
-        # Setup infrastructure
         renderer = G03Renderer()
         mock_window = MockWindow()
-        renderer.set_window(mock_window) # type: ignore[arg-type]
+        renderer.set_window(mock_window)  # type: ignore[arg-type]
 
         app_state = AppState()
         navigator = Navigator(renderer, app_state)
-        navigator.register_page("home", MockPage) # type: ignore[arg-type]
-        navigator.register_page("settings", MockPage) # type: ignore[arg-type]
+        navigator.register_page("home", MockPage)  # type: ignore[arg-type]
+        navigator.register_page("settings", MockPage)  # type: ignore[arg-type]
 
-        # Create menu
         menu = AppMenu(
             root=root,
             navigator=navigator,
@@ -630,34 +403,36 @@ if __name__ == "__main__":
             app_version="1.0.0",
         )
 
-        logger.info("[Test 1] AppMenu created successfully.")
+        assert menu is not None
+        assert menu._menubar is not None
+        assert menu._file_menu is not None
+        assert menu._view_menu is not None
+        assert menu._help_menu is not None
+        logger.info("[Test 1] PASSED - AppMenu created with all menus")
 
-        # Test custom menu
         tools_menu = menu.add_menu("Tools")
+        assert tools_menu is not None
         tools_menu.add_command(label="Test Tool", command=lambda: logger.info("Tool clicked"))
-        logger.info("[Test 2] Custom menu added.")
+        logger.info("[Test 2] PASSED - Custom menu added")
 
-        # Test adding command to File menu
         menu.add_command_to_file_menu(
             label="Save",
             command=lambda: logger.info("Save clicked"),
             accelerator="Ctrl+S",
         )
-        logger.info("[Test 3] Command added to File menu.")
+        logger.info("[Test 3] PASSED - Command added to File menu")
 
-        # Add a label to show the window is working
         label = tk.Label(root, text="Menu test - check File, View, Help menus\n\nClose window to end test")
         label.pack(expand=True)
 
         logger.info("[G04c] Self-test window opened. Close to complete test.")
         logger.info("=" * 60)
 
-        # Run briefly then close (or let user close)
-        root.after(3000, root.quit)  # Auto-close after 3 seconds
+        root.after(3000, root.quit)
         root.mainloop()
 
         logger.info("=" * 60)
-        logger.info("[G04c] All tests PASSED")
+        logger.info("[G04c] All tests PASSED (3 tests, 6 assertions)")
         logger.info("=" * 60)
 
     except Exception as exc:
@@ -665,7 +440,7 @@ if __name__ == "__main__":
         sys.exit(1)
     finally:
         try:
-            if root is not None:  # ← Add this check
+            if root is not None:
                 root.destroy()
         except Exception:
             pass

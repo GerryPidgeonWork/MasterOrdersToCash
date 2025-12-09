@@ -1,5 +1,5 @@
 # ====================================================================================================
-# G03c_form_patterns.py
+# G03c_form_patterns.py                                                                  [v1.0.0]
 # ----------------------------------------------------------------------------------------------------
 # Form patterns for the GUI framework.
 #
@@ -8,21 +8,10 @@
 #   - Build forms using G02a widget primitives and G02b layout helpers.
 #   - Enable consistent form styling and layout across the application.
 #
-# Relationships:
-#   - G01a_style_config     → spacing tokens.
-#   - G02a_widget_primitives → make_label, make_entry, make_combobox, make_spinbox, etc.
-#   - G02b_layout_utils     → layout helpers.
-#   - G03c_form_patterns    → form patterns (THIS MODULE).
-#
-# Design principles:
-#   - Functions accept parent + field definitions.
-#   - Return container frame + mapping of field names → widgets/variables.
-#   - No validation or business rules — just structure + styling.
-#
 # ----------------------------------------------------------------------------------------------------
 # Author:       Gerry Pidgeon
-# Created:      2025-12-03
-# Project:      GUI Framework v1.0
+# Created:      2025-12-12
+# Project:      SimpleTk v1.0
 # ====================================================================================================
 
 
@@ -75,20 +64,9 @@ logger = get_logger(__name__)
 # --- Additional project-level imports (append below this line only) ----------------------------------
 from gui.G00a_gui_packages import tk, ttk, init_gui_theme
 
-# Widget primitives and spacing tokens from G02a (G03's ONLY source for tokens)
-# G03 must NEVER import from G01 directly - all tokens come via G02a facade.
 from gui.G02a_widget_primitives import (
-    # Spacing tokens (re-exported from G01a via G02a)
-    SPACING_XS,
-    SPACING_SM,
-    SPACING_MD,
-    # Widget factories
-    make_label,
-    make_entry,
-    make_combobox,
-    make_spinbox,
-    make_checkbox,
-    make_button,
+    SPACING_XS, SPACING_SM, SPACING_MD,
+    make_label, make_entry, make_combobox, make_spinbox, make_checkbox, make_button,
     label_style_error,
 )
 
@@ -97,38 +75,20 @@ from gui.G03b_container_patterns import make_titled_section
 
 # ====================================================================================================
 # 3. TYPE DEFINITIONS
-# ----------------------------------------------------------------------------------------------------
-# Type definitions for form field specifications.
 # ====================================================================================================
 
 @dataclass
 class FormField:
     """
-    Description:
-        Specification for a single form field.
+    Specification for a single form field.
 
-    Args:
-        name:
-            Unique identifier for the field.
-        label:
-            Display label text.
-        field_type:
-            Type of input: "entry", "combobox", "spinbox", "checkbox".
-        options:
-            For combobox: list of options. For spinbox: dict with from_/to keys.
-        required:
-            Whether the field is required.
-        default:
-            Default value for the field.
-
-    Returns:
-        None.
-
-    Raises:
-        None.
-
-    Notes:
-        - Use this dataclass to define form fields programmatically.
+    Attributes:
+        name: Unique identifier for the field.
+        label: Display label text.
+        field_type: Type of input: "entry", "combobox", "spinbox", "checkbox".
+        options: For combobox: list of options. For spinbox: dict with from_/to keys.
+        required: Whether the field is required.
+        default: Default value for the field.
     """
     name: str
     label: str
@@ -141,25 +101,12 @@ class FormField:
 @dataclass
 class FormResult:
     """
-    Description:
-        Result container returned by form builders.
+    Result container returned by form builders.
 
-    Args:
-        frame:
-            The container frame holding the form.
-        fields:
-            Dictionary mapping field names to widget instances.
-        variables:
-            Dictionary mapping field names to tk variable instances.
-
-    Returns:
-        None.
-
-    Raises:
-        None.
-
-    Notes:
-        - Use variables dict to get/set field values.
+    Attributes:
+        frame: The container frame holding the form.
+        fields: Dictionary mapping field names to widget instances.
+        variables: Dictionary mapping field names to tk variable instances.
     """
     frame: ttk.Frame
     fields: Mapping[str, tk.Misc]
@@ -168,8 +115,6 @@ class FormResult:
 
 # ====================================================================================================
 # 4. SINGLE FIELD PATTERNS
-# ----------------------------------------------------------------------------------------------------
-# Patterns for individual form fields.
 # ====================================================================================================
 
 def form_field_entry(
@@ -185,29 +130,21 @@ def form_field_entry(
         Create a label + entry field row.
 
     Args:
-        parent:
-            The parent widget.
-        label:
-            Label text for the field.
-        variable:
-            Optional StringVar to bind. Created if None.
-        label_width:
-            Width of the label column.
-        required:
-            Whether to show a required indicator (*).
-        gap:
-            Gap between label and entry.
+        parent: The parent widget.
+        label: Label text for the field.
+        variable: Optional StringVar to bind. Created if None.
+        label_width: Width of the label column.
+        required: Whether to show a required indicator (*).
+        gap: Gap between label and entry.
 
     Returns:
-        tuple[ttk.Frame, ttk.Entry, tk.StringVar]:
-            A tuple of (row_frame, entry_widget, string_variable).
+        tuple: (row_frame, entry_widget, string_variable).
 
     Raises:
         None.
 
     Notes:
-        - Entry expands to fill available width.
-        - Required fields show asterisk after label.
+        Entry expands to fill available width. Required fields show asterisk.
     """
     if variable is None:
         variable = tk.StringVar()
@@ -241,31 +178,22 @@ def form_field_combobox(
         Create a label + combobox field row.
 
     Args:
-        parent:
-            The parent widget.
-        label:
-            Label text for the field.
-        options:
-            List of dropdown options.
-        variable:
-            Optional StringVar to bind. Created if None.
-        label_width:
-            Width of the label column.
-        required:
-            Whether to show a required indicator (*).
-        gap:
-            Gap between label and combobox.
+        parent: The parent widget.
+        label: Label text for the field.
+        options: List of dropdown options.
+        variable: Optional StringVar to bind. Created if None.
+        label_width: Width of the label column.
+        required: Whether to show a required indicator (*).
+        gap: Gap between label and combobox.
 
     Returns:
-        tuple[ttk.Frame, ttk.Combobox, tk.StringVar]:
-            A tuple of (row_frame, combobox_widget, string_variable).
+        tuple: (row_frame, combobox_widget, string_variable).
 
     Raises:
         None.
 
     Notes:
-        - Combobox expands to fill available width.
-        - Set state="readonly" after creation for non-editable dropdowns.
+        Combobox expands to fill available width.
     """
     if variable is None:
         variable = tk.StringVar()
@@ -300,32 +228,23 @@ def form_field_spinbox(
         Create a label + spinbox field row.
 
     Args:
-        parent:
-            The parent widget.
-        label:
-            Label text for the field.
-        from_:
-            Minimum spinbox value.
-        to:
-            Maximum spinbox value.
-        variable:
-            Optional StringVar to bind. Created if None.
-        label_width:
-            Width of the label column.
-        required:
-            Whether to show a required indicator (*).
-        gap:
-            Gap between label and spinbox.
+        parent: The parent widget.
+        label: Label text for the field.
+        from_: Minimum spinbox value.
+        to: Maximum spinbox value.
+        variable: Optional StringVar to bind. Created if None.
+        label_width: Width of the label column.
+        required: Whether to show a required indicator (*).
+        gap: Gap between label and spinbox.
 
     Returns:
-        tuple[ttk.Frame, ttk.Spinbox, tk.StringVar]:
-            A tuple of (row_frame, spinbox_widget, string_variable).
+        tuple: (row_frame, spinbox_widget, string_variable).
 
     Raises:
         None.
 
     Notes:
-        - Spinbox has fixed width unlike entry/combobox.
+        Spinbox has fixed width unlike entry/combobox.
     """
     if variable is None:
         variable = tk.StringVar()
@@ -357,34 +276,26 @@ def form_field_checkbox(
         Create a label + checkbox field row.
 
     Args:
-        parent:
-            The parent widget.
-        label:
-            Label text displayed next to checkbox.
-        variable:
-            Optional BooleanVar to bind. Created if None.
-        label_width:
-            Width for alignment (checkbox has integrated label).
-        gap:
-            Gap for alignment consistency.
+        parent: The parent widget.
+        label: Label text displayed next to checkbox.
+        variable: Optional BooleanVar to bind. Created if None.
+        label_width: Width for alignment (checkbox has integrated label).
+        gap: Gap for alignment consistency.
 
     Returns:
-        tuple[ttk.Frame, ttk.Checkbutton, tk.BooleanVar]:
-            A tuple of (row_frame, checkbox_widget, boolean_variable).
+        tuple: (row_frame, checkbox_widget, boolean_variable).
 
     Raises:
         None.
 
     Notes:
-        - Checkbox includes its own text label.
-        - Spacer maintains alignment with other form fields.
+        Checkbox includes its own text label. Spacer maintains alignment.
     """
     if variable is None:
         variable = tk.BooleanVar()
 
     row = ttk.Frame(parent)
 
-    # Spacer for alignment
     spacer = ttk.Frame(row, width=label_width)
     spacer.grid(row=0, column=0, padx=(0, gap))
 
@@ -396,8 +307,6 @@ def form_field_checkbox(
 
 # ====================================================================================================
 # 5. VALIDATION MESSAGE PATTERN
-# ----------------------------------------------------------------------------------------------------
-# Pattern for displaying field validation messages.
 # ====================================================================================================
 
 def validation_message(
@@ -410,24 +319,18 @@ def validation_message(
         Create a validation message label with show/hide controls.
 
     Args:
-        parent:
-            The parent widget.
-        message:
-            Initial message text (usually empty).
-        visible:
-            Whether the message is initially visible.
+        parent: The parent widget.
+        message: Initial message text (usually empty).
+        visible: Whether the message is initially visible.
 
     Returns:
-        tuple[ttk.Label, Callable[[str], None], Callable[[], None]]:
-            A tuple of (label_widget, show_function, hide_function).
+        tuple: (label_widget, show_function, hide_function).
 
     Raises:
         None.
 
     Notes:
-        - Use show(msg) to display a validation error.
-        - Use hide() to clear the message.
-        - Label uses error styling.
+        Use show(msg) to display error, hide() to clear. Label uses error styling.
     """
     style_name = label_style_error()
     label = ttk.Label(parent, text=message, style=style_name)
@@ -448,8 +351,6 @@ def validation_message(
 
 # ====================================================================================================
 # 6. FORM GROUP PATTERNS
-# ----------------------------------------------------------------------------------------------------
-# Patterns for groups of form fields.
 # ====================================================================================================
 
 def form_group(
@@ -463,25 +364,19 @@ def form_group(
         Create a group of form fields from field specifications.
 
     Args:
-        parent:
-            The parent widget.
-        fields:
-            List of FormField specifications.
-        label_width:
-            Width of label columns.
-        row_spacing:
-            Vertical spacing between rows.
+        parent: The parent widget.
+        fields: List of FormField specifications.
+        label_width: Width of label columns.
+        row_spacing: Vertical spacing between rows.
 
     Returns:
-        FormResult:
-            Container with frame, fields dict, and variables dict.
+        FormResult: Container with frame, fields dict, and variables dict.
 
     Raises:
         None.
 
     Notes:
-        - Supports entry, combobox, spinbox, and checkbox types.
-        - Variables are created automatically for each field.
+        Supports entry, combobox, spinbox, and checkbox types.
     """
     frame = ttk.Frame(parent)
     field_widgets: dict[str, tk.Misc] = {}
@@ -547,43 +442,31 @@ def form_section(
         Create a titled form section with grouped fields.
 
     Args:
-        parent:
-            The parent widget.
-        title:
-            Section title text.
-        fields:
-            List of FormField specifications.
-        label_width:
-            Width of label columns.
-        row_spacing:
-            Vertical spacing between rows.
-        section_padding:
-            Padding around the section.
+        parent: The parent widget.
+        title: Section title text.
+        fields: List of FormField specifications.
+        label_width: Width of label columns.
+        row_spacing: Vertical spacing between rows.
+        section_padding: Padding around the section.
 
     Returns:
-        FormResult:
-            Container with frame, fields dict, and variables dict.
+        FormResult: Container with frame, fields dict, and variables dict.
 
     Raises:
         None.
 
     Notes:
-        - Combines titled_section with form_group.
-        - Import titled_section from G03b to avoid duplication.
+        Combines titled_section with form_group.
     """
-
     outer, content = make_titled_section(parent, title=title, content_padding=section_padding)
 
     result = form_group(content, fields=fields, label_width=label_width, row_spacing=row_spacing)
 
-    # Replace frame reference with outer section frame
     return FormResult(frame=outer, fields=result.fields, variables=result.variables)
 
 
 # ====================================================================================================
 # 7. BUTTON ROW PATTERN
-# ----------------------------------------------------------------------------------------------------
-# Pattern for form action buttons.
 # ====================================================================================================
 
 def form_button_row(
@@ -598,32 +481,24 @@ def form_button_row(
         Create a row of form action buttons.
 
     Args:
-        parent:
-            The parent widget.
-        buttons:
-            List of (text, command) tuples. Command can be None.
-        alignment:
-            Horizontal alignment: "left", "center", "right".
-        spacing:
-            Spacing between buttons.
-        padding:
-            Padding around the button row.
+        parent: The parent widget.
+        buttons: List of (text, command) tuples. Command can be None.
+        alignment: Horizontal alignment: "left", "center", "right".
+        spacing: Spacing between buttons.
+        padding: Padding around the button row.
 
     Returns:
-        tuple[ttk.Frame, dict[str, ttk.Button]]:
-            A tuple of (row_frame, buttons_dict keyed by text).
+        tuple: (row_frame, buttons_dict keyed by text).
 
     Raises:
         None.
 
     Notes:
-        - Buttons are packed based on alignment.
-        - First button in list is typically primary action.
+        Buttons packed based on alignment. First button typically primary action.
     """
     row = ttk.Frame(parent, padding=padding)
     button_widgets: dict[str, ttk.Button] = {}
 
-    # Container for buttons based on alignment
     if alignment == "right":
         container = ttk.Frame(row)
         container.pack(side="right")
@@ -636,7 +511,7 @@ def form_button_row(
 
     for i, (text, command) in enumerate(buttons):
         padx = (0, spacing) if i < len(buttons) - 1 else (0, 0)
-        btn = make_button(container, text=text, command=command, variant="PRIMARY")
+        btn = make_button(container, text=text, command=command, bg_colour="PRIMARY")
         btn.pack(side="left", padx=padx)
         button_widgets[text] = btn
 
@@ -645,8 +520,6 @@ def form_button_row(
 
 # ====================================================================================================
 # 8. PUBLIC API
-# ----------------------------------------------------------------------------------------------------
-# Expose all form pattern functions.
 # ====================================================================================================
 
 __all__ = [
@@ -670,8 +543,6 @@ __all__ = [
 
 # ====================================================================================================
 # 9. SELF-TEST
-# ----------------------------------------------------------------------------------------------------
-# Minimal smoke test demonstrating form patterns.
 # ====================================================================================================
 
 if __name__ == "__main__":
@@ -679,39 +550,51 @@ if __name__ == "__main__":
     logger.info("[G03c] Running G03c_form_patterns smoke test...")
 
     root = tk.Tk()
-    init_gui_theme() # CRITICAL: Call immediately after creating root
+    init_gui_theme()
     root.title("G03c Form Patterns — Smoke Test")
-    root.geometry("500x500")
+    root.geometry("500x600")
 
     try:
         main = ttk.Frame(root, padding=SPACING_MD)
         main.pack(fill="both", expand=True)
 
-        # Individual field patterns
         row1, entry1, var1 = form_field_entry(main, label="Username", required=True)
+        assert row1 is not None
+        assert entry1 is not None
+        assert var1 is not None
         row1.pack(fill="x", pady=(0, SPACING_SM))
         logger.info("form_field_entry() created")
 
         row2, combo, var2 = form_field_combobox(
             main, label="Country", options=["USA", "UK", "Canada", "Australia"]
         )
+        assert row2 is not None
+        assert combo is not None
+        assert var2 is not None
         row2.pack(fill="x", pady=(0, SPACING_SM))
         logger.info("form_field_combobox() created")
 
         row3, spin, var3 = form_field_spinbox(main, label="Age", from_=18, to=100)
+        assert row3 is not None
+        assert spin is not None
+        assert var3 is not None
         row3.pack(fill="x", pady=(0, SPACING_SM))
         logger.info("form_field_spinbox() created")
 
         row4, chk, var4 = form_field_checkbox(main, label="Subscribe to newsletter")
+        assert row4 is not None
+        assert chk is not None
+        assert var4 is not None
         row4.pack(fill="x", pady=(0, SPACING_MD))
         logger.info("form_field_checkbox() created")
 
-        # Validation message
         val_label, show_error, hide_error = validation_message(main)
+        assert val_label is not None
+        assert callable(show_error)
+        assert callable(hide_error)
         show_error("This is a validation error message")
         logger.info("validation_message() created")
 
-        # Form group
         fields = [
             FormField(name="email", label="Email", required=True),
             FormField(name="phone", label="Phone"),
@@ -719,10 +602,24 @@ if __name__ == "__main__":
                       options=["Sales", "Engineering", "Marketing"]),
         ]
         result = form_group(main, fields=fields)
+        assert result.frame is not None
+        assert len(result.fields) == 3
+        assert len(result.variables) == 3
+        assert "email" in result.fields
         result.frame.pack(fill="x", pady=SPACING_MD)
         logger.info("form_group() created with %d fields", len(result.fields))
 
-        # Button row
+        section_fields = [
+            FormField(name="first_name", label="First Name", required=True),
+            FormField(name="last_name", label="Last Name", required=True),
+        ]
+        section_result = form_section(main, title="Personal Info", fields=section_fields)
+        assert section_result.frame is not None
+        assert len(section_result.fields) == 2
+        assert "first_name" in section_result.fields
+        section_result.frame.pack(fill="x", pady=(0, SPACING_MD))
+        logger.info("form_section() created with %d fields", len(section_result.fields))
+
         def on_submit() -> None:
             logger.info("Submit clicked")
 
@@ -734,10 +631,14 @@ if __name__ == "__main__":
             buttons=[("Submit", on_submit), ("Cancel", on_cancel)],
             alignment="right"
         )
+        assert btn_row is not None
+        assert len(btns) == 2
+        assert "Submit" in btns
+        assert "Cancel" in btns
         btn_row.pack(fill="x")
         logger.info("form_button_row() created")
 
-        logger.info("[G03c] All smoke tests passed.")
+        logger.info("[G03c] All assertions passed (8 functions tested).")
         root.mainloop()
 
     except Exception as exc:
