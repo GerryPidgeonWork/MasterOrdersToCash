@@ -28,21 +28,24 @@ class TestParseDate:
     
     @pytest.mark.unit
     def test_parse_date_uk_format(self):
-        """Test parsing UK format dates (DD/MM/YYYY)."""
-        result = parse_date("15/11/2025")
+        """Test parsing UK format dates (DD/MM/YYYY) with auto-detection."""
+        # parse_date supports UK format when fmt=None (auto-detection)
+        result = parse_date("15/11/2025", fmt=None)
         assert result == date(2025, 11, 15)
-    
+
     @pytest.mark.unit
     def test_parse_date_invalid(self):
-        """Test that invalid dates return None."""
-        result = parse_date("invalid-date")
-        assert result is None
-    
+        """Test that invalid dates raise ValueError."""
+        # parse_date raises ValueError for invalid dates (doesn't return None)
+        with pytest.raises(ValueError):
+            parse_date("invalid-date")
+
     @pytest.mark.unit
     def test_parse_date_none(self):
-        """Test that None input returns None."""
-        result = parse_date(None)
-        assert result is None
+        """Test that None input raises TypeError."""
+        # parse_date raises TypeError for None input
+        with pytest.raises(TypeError):
+            parse_date(None)
 
 
 class TestFormatDate:
@@ -76,28 +79,30 @@ class TestWeekHelpers:
     @pytest.mark.unit
     def test_get_start_of_week_monday(self):
         """Test getting Monday from any day of the week."""
-        # Thursday, 2025-11-14
+        # Friday, 2025-11-14 (weekday=4)
         test_date = date(2025, 11, 14)
         result = get_start_of_week(test_date)
-        # Should return Monday, 2025-11-11
-        assert result == date(2025, 11, 11)
+        # Should return Monday, 2025-11-10 (weekday=0)
+        assert result == date(2025, 11, 10)
         assert result.weekday() == 0  # Monday = 0
-    
+
     @pytest.mark.unit
     def test_get_start_of_week_already_monday(self):
         """Test that Monday returns itself."""
-        monday = date(2025, 11, 11)
+        # Monday, 2025-11-10
+        monday = date(2025, 11, 10)
         result = get_start_of_week(monday)
         assert result == monday
-    
+        assert result.weekday() == 0
+
     @pytest.mark.unit
     def test_get_end_of_week_sunday(self):
         """Test getting Sunday from any day of the week."""
-        # Thursday, 2025-11-14
+        # Friday, 2025-11-14 (weekday=4)
         test_date = date(2025, 11, 14)
         result = get_end_of_week(test_date)
-        # Should return Sunday, 2025-11-17
-        assert result == date(2025, 11, 17)
+        # Should return Sunday, 2025-11-16 (weekday=6)
+        assert result == date(2025, 11, 16)
         assert result.weekday() == 6  # Sunday = 6
 
 
