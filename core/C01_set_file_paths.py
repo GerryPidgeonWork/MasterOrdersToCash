@@ -97,12 +97,15 @@ CONFIG_DIR: Path = PROJECT_ROOT / "config"
 CORE_DIR: Path = PROJECT_ROOT / "core"
 CREDENTIALS_DIR: Path = PROJECT_ROOT / "credentials"
 DATA_DIR: Path = PROJECT_ROOT / "data"
+GUI_DIR: Path = PROJECT_ROOT / "gui"
 IMPLEMENTATION_DIR: Path = PROJECT_ROOT / "implementation"
 LOGS_DIR: Path = PROJECT_ROOT / "logs"
 MAIN_DIR: Path = PROJECT_ROOT / "main"
 OUTPUTS_DIR: Path = PROJECT_ROOT / "outputs"
 SCRATCHPAD_DIR: Path = PROJECT_ROOT / "scratchpad"
 SQL_DIR: Path = PROJECT_ROOT / "sql"
+TECH_DOCS_DIR: Path = PROJECT_ROOT / "tech_docs"
+USER_GUIDES_DIR: Path = PROJECT_ROOT / "user_guides"
 
 CORE_FOLDERS: tuple[Path, ...] = (
     BINARY_FILES_DIR,
@@ -111,12 +114,15 @@ CORE_FOLDERS: tuple[Path, ...] = (
     CORE_DIR,
     CREDENTIALS_DIR,
     DATA_DIR,
+    GUI_DIR,
     IMPLEMENTATION_DIR,
     LOGS_DIR,
     MAIN_DIR,
     OUTPUTS_DIR,
     SCRATCHPAD_DIR,
-    SQL_DIR
+    SQL_DIR,
+    TECH_DOCS_DIR,
+    USER_GUIDES_DIR
 )
 
 
@@ -271,12 +277,15 @@ if __name__ == "__main__":
         "CORE_DIR": CORE_DIR,
         "CREDENTIALS_DIR": CREDENTIALS_DIR,
         "DATA_DIR": DATA_DIR,
+        "GUI_DIR": GUI_DIR,
         "IMPLEMENTATION_DIR": IMPLEMENTATION_DIR,
         "LOGS_DIR": LOGS_DIR,
         "MAIN_DIR": MAIN_DIR,
         "OUTPUTS_DIR": OUTPUTS_DIR,
         "SCRATCHPAD_DIR": SCRATCHPAD_DIR,
-        "SQL_DIR": SQL_DIR
+        "SQL_DIR": SQL_DIR,
+        "TECH_DOCS_DIR": TECH_DOCS_DIR,
+        "USER_GUIDES_DIR": USER_GUIDES_DIR
     }.items():
         logger.info("  %s : %s", name.ljust(20), p)
 

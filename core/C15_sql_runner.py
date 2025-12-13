@@ -8,13 +8,18 @@
 #   - Allow projects to store SQL logic outside Python while executing it safely.
 #   - Support lightweight parameter substitution for templated SQL files.
 #   - Integrate seamlessly with Snowflake connector (C14) and the central logger.
+#   - Return results as raw tuples or pandas DataFrames.
 #
 # Usage:
-#   from core.C15_sql_runner import run_sql_file
+#   from core.C15_sql_runner import run_sql_file, run_sql_file_to_dataframe
 #
 #   conn = connect_to_snowflake("user@example.com")
-#   results = run_sql_file(conn, "orders_summary.sql",
-#                          params={"start_date": "2025-11-01"})
+#
+#   # Raw tuples
+#   results = run_sql_file(conn, "orders_summary.sql", params={"start_date": "2025-11-01"})
+#
+#   # DataFrame
+#   df = run_sql_file_to_dataframe(conn, "orders_summary.sql", params={"start_date": "2025-11-01"})
 #
 # ----------------------------------------------------------------------------------------------------
 # Author:       Gerry Pidgeon
@@ -52,12 +57,20 @@ sys.dont_write_bytecode = True
 
 
 # ====================================================================================================
-# 2. PROJECT IMPORTS (IMMUTABLE PROTECTED REGION)
+# 2. PROJECT IMPORTS
 # ----------------------------------------------------------------------------------------------------
-# ALL external + standard-library packages must come from C00_set_packages ONLY.
+# Bring in shared external and standard-library packages from the central import hub.
+#
+# CRITICAL ARCHITECTURE RULE:
+#   ALL external (and commonly-used standard-library) packages must be imported exclusively via:
+#       from core.C00_set_packages import *
+#   No other script may import external libraries directly.
+#
+# This module must not import any GUI packages.
 # ----------------------------------------------------------------------------------------------------
 from core.C00_set_packages import *
 
+# --- Initialise module-level logger -----------------------------------------------------------------
 from core.C03_logging_handler import get_logger, log_exception, init_logging
 logger = get_logger(__name__)
 
@@ -124,7 +137,7 @@ def load_sql_file(file_name: str, params: Dict[str, Any] | None = None) -> str:
 
 
 # ====================================================================================================
-# 4. EXECUTE SQL FILE
+# 4. EXECUTE SQL FILE (RAW TUPLES)
 # ----------------------------------------------------------------------------------------------------
 def run_sql_file(
     conn: Any,
@@ -169,7 +182,119 @@ def run_sql_file(
 
 
 # ====================================================================================================
-# 5. MAIN EXECUTION (SANDBOXED TEST)
+# 5. EXECUTE SQL TO DATAFRAME
+# ----------------------------------------------------------------------------------------------------
+def run_sql_to_dataframe(
+    conn: Any,
+    sql: str,
+    standardise: bool = True,
+) -> pd.DataFrame | None:
+    """
+    Description:
+        Executes a SQL query string and returns results as a pandas DataFrame.
+
+    Args:
+        conn (Any):
+            Active Snowflake connection.
+        sql (str):
+            SQL query string to execute.
+        standardise (bool):
+            If True, apply standardise_columns() to normalise column names.
+            Defaults to True.
+
+    Returns:
+        pd.DataFrame | None:
+            Query results as DataFrame, or None on error.
+
+    Raises:
+        None.
+
+    Notes:
+        - Uses Snowflake cursor's fetch_pandas_all() for optimal performance.
+        - All exceptions are logged and return None.
+    """
+    try:
+        logger.info("🚀 Executing SQL to DataFrame...")
+        cur = conn.cursor()
+        cur.execute(sql)
+        df = cur.fetch_pandas_all()
+        cur.close()
+        logger.info("📦 Returned %s rows, %s columns", len(df), len(df.columns))
+
+        if standardise:
+            from core.C11_data_processing import standardise_columns
+            df = standardise_columns(df)
+
+        return df
+
+    except Exception as exc:
+        log_exception(exc, context="run_sql_to_dataframe")
+        return None
+
+
+# ====================================================================================================
+# 5. EXECUTE SQL TO DATAFRAME
+# ----------------------------------------------------------------------------------------------------
+def run_sql_to_dataframe(
+    conn: Any,
+    sql: str,
+    standardise: bool = True,
+) -> pd.DataFrame | None:
+    """
+    Description:
+        Executes a SQL query string and returns results as a pandas DataFrame.
+
+    Args:
+        conn (Any):
+            Active Snowflake connection.
+        sql (str):
+            SQL query string to execute.
+        standardise (bool):
+            If True, apply standardise_columns() to normalise column names.
+            Defaults to True.
+
+    Returns:
+        pd.DataFrame | None:
+            Query results as DataFrame, or None on error.
+
+    Raises:
+        None.
+
+    Notes:
+        - Attempts fetch_pandas_all() for optimal performance.
+        - Falls back to manual DataFrame construction if Arrow unavailable.
+        - All exceptions are logged and return None.
+    """
+    try:
+        logger.info("🚀 Executing SQL to DataFrame...")
+        cur = conn.cursor()
+        cur.execute(sql)
+
+        # Try Arrow-based fetch first, fallback to manual construction
+        try:
+            df = cur.fetch_pandas_all()
+        except Exception as arrow_exc:
+            logger.warning("⚠️ Arrow fetch failed, using fallback: %s", arrow_exc)
+            columns = [desc[0] for desc in cur.description]
+            data = cur.fetchall()
+            df = pd.DataFrame(data, columns=columns)
+
+        cur.close()
+        logger.info("📦 Returned %s rows, %s columns", len(df), len(df.columns))
+
+        if standardise:
+            from core.C11_data_processing import standardise_columns
+            df = standardise_columns(df)
+
+        return df
+
+    except Exception as exc:
+        log_exception(exc, context="run_sql_to_dataframe")
+        return None
+
+
+# ====================================================================================================
+# 7. MAIN EXECUTION (SANDBOXED TEST)
 # ----------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
     """
@@ -221,11 +346,15 @@ if __name__ == "__main__":
 
         params = {"label": "C15 self-test"}
 
+        # Test raw tuple result
         result = run_sql_file(conn, "test_query.sql", params=params)
-
         if result:
-            logger.info("🧾 SQL Runner Output: %s", result)
-            print(result)
+            logger.info("🧾 Raw tuple result: %s", result)
+
+        # Test DataFrame result
+        df = run_sql_file_to_dataframe(conn, "test_query.sql", params=params)
+        if df is not None:
+            logger.info("🧾 DataFrame result:\n%s", df)
 
         conn.close()
         logger.info("✅ SQL runner test completed successfully.")

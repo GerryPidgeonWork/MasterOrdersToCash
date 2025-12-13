@@ -24,52 +24,32 @@
 
 # ====================================================================================================
 # 1. SYSTEM IMPORTS
-# ----------------------------------------------------------------------------------------------------
-# These imports (sys, pathlib.Path) are required to correctly initialise the project environment,
-# ensure the core library can be imported safely (including C00_set_packages.py),
-# and prevent project-local paths from overriding installed site-packages.
-# ----------------------------------------------------------------------------------------------------
+# ====================================================================================================
 
-# --- Future behaviour & type system enhancements -----------------------------------------------------
-from __future__ import annotations           # Future-proof type hinting (PEP 563 / PEP 649)
+from __future__ import annotations
 
-# --- Required for dynamic path handling and safe importing of core modules ---------------------------
-import sys                                   # Python interpreter access (path, environment, runtime)
-from pathlib import Path                     # Modern, object-oriented filesystem path handling
-from typing import Literal, get_args         # Type system for Literal types and validation
+import sys
+from pathlib import Path
 
-# --- Ensure project root DOES NOT override site-packages --------------------------------------------
 project_root = str(Path(__file__).resolve().parent.parent)
 if project_root not in sys.path:
     sys.path.append(project_root)
 
-# --- Remove '' (current working directory) which can shadow installed packages -----------------------
 if "" in sys.path:
     sys.path.remove("")
 
-# --- Prevent creation of __pycache__ folders ---------------------------------------------------------
 sys.dont_write_bytecode = True
 
 
 # ====================================================================================================
 # 2. PROJECT IMPORTS
-# ----------------------------------------------------------------------------------------------------
-# Bring in shared external packages from the central import hub.
-#
-# CRITICAL ARCHITECTURE RULE:
-#   ALL external + stdlib packages MUST be imported exclusively via:
-#       from core.C00_set_packages import *
-#   No other script may import external libraries directly.
-#
-# C01_set_file_paths is a pure core module and must not import GUI packages.
-# ----------------------------------------------------------------------------------------------------
+# ====================================================================================================
+
 from core.C00_set_packages import *
 
-# --- Initialise module-level logger -----------------------------------------------------------------
 from core.C03_logging_handler import get_logger, log_exception, init_logging
 logger = get_logger(__name__)
 
-# --- Additional project-level imports (append below this line only) ----------------------------------
 from gui.G00a_gui_packages import tk, ttk, init_gui_theme
 
 from gui.G01a_style_config import (
@@ -388,49 +368,100 @@ def button_style(
     )
 
 
-def button_primary() -> str:
-    """Return primary button style (white text on blue). Forwards to G01f."""
-    return control_button_primary()
+def button_primary(
+    parent: tk.Misc | tk.Widget,
+    text: str = "",
+    command: Callable[[], None] | None = None,
+    **kwargs: Any,
+) -> ttk.Button:
+    """Create a primary button (white text on blue background)."""
+    return make_button(parent, text=text, command=command, bg_colour="PRIMARY", **kwargs)
 
 
-def button_secondary() -> str:
-    """Return secondary button style (black text). Forwards to G01f."""
-    return control_button_secondary()
+def button_secondary(
+    parent: tk.Misc | tk.Widget,
+    text: str = "",
+    command: Callable[[], None] | None = None,
+    **kwargs: Any,
+) -> ttk.Button:
+    """Create a secondary button (dark text on grey background)."""
+    return make_button(parent, text=text, command=command, bg_colour="SECONDARY", **kwargs)
 
 
-def button_success() -> str:
-    """Return success button style (white text on green). Forwards to G01f."""
-    return control_button_success()
+def button_success(
+    parent: tk.Misc | tk.Widget,
+    text: str = "",
+    command: Callable[[], None] | None = None,
+    **kwargs: Any,
+) -> ttk.Button:
+    """Create a success button (white text on green background)."""
+    return make_button(parent, text=text, command=command, bg_colour="SUCCESS", **kwargs)
 
 
-def button_warning() -> str:
-    """Return warning button style (black text on yellow). Forwards to G01f."""
-    return control_button_warning()
+def button_warning(
+    parent: tk.Misc | tk.Widget,
+    text: str = "",
+    command: Callable[[], None] | None = None,
+    **kwargs: Any,
+) -> ttk.Button:
+    """Create a warning button (dark text on yellow background)."""
+    return make_button(parent, text=text, command=command, bg_colour="WARNING", **kwargs)
 
 
-def button_error() -> str:
-    """Return error button style (white text on red). Forwards to G01f."""
-    return control_button_error()
+def button_error(
+    parent: tk.Misc | tk.Widget,
+    text: str = "",
+    command: Callable[[], None] | None = None,
+    **kwargs: Any,
+) -> ttk.Button:
+    """Create an error button (white text on red background)."""
+    return make_button(parent, text=text, command=command, bg_colour="ERROR", **kwargs)
 
 
-def checkbox_primary() -> str:
-    """Return primary checkbox style. Forwards to G01f."""
-    return control_checkbox_primary()
+def checkbox_primary(
+    parent: tk.Misc | tk.Widget,
+    text: str = "",
+    variable: tk.BooleanVar | None = None,
+    command: Callable[[], None] | None = None,
+    **kwargs: Any,
+) -> ttk.Checkbutton:
+    """Create a primary checkbox."""
+    return make_checkbox(parent, text=text, variable=variable, command=command, bg_colour="PRIMARY", **kwargs)
 
 
-def checkbox_success() -> str:
-    """Return success checkbox style. Forwards to G01f."""
-    return control_checkbox_success()
+def checkbox_success(
+    parent: tk.Misc | tk.Widget,
+    text: str = "",
+    variable: tk.BooleanVar | None = None,
+    command: Callable[[], None] | None = None,
+    **kwargs: Any,
+) -> ttk.Checkbutton:
+    """Create a success checkbox."""
+    return make_checkbox(parent, text=text, variable=variable, command=command, bg_colour="SUCCESS", **kwargs)
 
 
-def radio_primary() -> str:
-    """Return primary radio button style. Forwards to G01f."""
-    return control_radio_primary()
+def radio_primary(
+    parent: tk.Misc | tk.Widget,
+    text: str = "",
+    variable: tk.StringVar | None = None,
+    value: str = "",
+    command: Callable[[], None] | None = None,
+    **kwargs: Any,
+) -> ttk.Radiobutton:
+    """Create a primary radio button."""
+    return make_radio(parent, text=text, variable=variable, value=value, command=command, bg_colour="PRIMARY", **kwargs)
 
 
-def radio_warning() -> str:
-    """Return warning radio button style. Forwards to G01f."""
-    return control_radio_warning()
+def radio_warning(
+    parent: tk.Misc | tk.Widget,
+    text: str = "",
+    variable: tk.StringVar | None = None,
+    value: str = "",
+    command: Callable[[], None] | None = None,
+    **kwargs: Any,
+) -> ttk.Radiobutton:
+    """Create a warning radio button."""
+    return make_radio(parent, text=text, variable=variable, value=value, command=command, bg_colour="WARNING", **kwargs)
 
 
 def switch_primary() -> str:
@@ -673,7 +704,7 @@ def make_entry(
     border_weight: BorderWeightType | None = "THIN",
     border_colour: str | None = None,
     border_shade: ShadeType | None = None,
-    padding: SpacingType | None = "SM",
+    padding: SpacingType | None = "XS",
     size: SizeType = "BODY",
     **kwargs: Any,
 ) -> ttk.Entry:
@@ -762,13 +793,18 @@ def make_combobox(
         padding=padding, size=size,
     )
 
-    combo_kwargs: dict[str, Any] = {"style": style_name, **kwargs}
+    font_key = resolve_text_font(size=size or "BODY", bold=False)
+    
+    combo_kwargs: dict[str, Any] = {"style": style_name, "font": font_key, **kwargs}
     if textvariable is not None:
         combo_kwargs["textvariable"] = textvariable
     if values is not None:
         combo_kwargs["values"] = values
 
     combo = ttk.Combobox(parent, **combo_kwargs)
+    
+    # Also apply font to the dropdown list
+    combo.option_add('*TCombobox*Listbox.font', font_key)
 
     combo.bind("<MouseWheel>", lambda e: "break")
     combo.bind("<Button-4>", lambda e: "break")
@@ -888,7 +924,7 @@ def make_button(
         KeyError: If shade tokens are invalid for their colour families.
 
     Notes:
-        Hover/pressed states auto-derived: LIGHT→MID→DARK or DARK→MID→LIGHT.
+        Hover/pressed states auto-derived: LIGHTâ†’MIDâ†’DARK or DARKâ†’MIDâ†’LIGHT.
     """
     bg_colour_resolved = resolve_colour(bg_colour)
     border_colour_resolved = resolve_colour(border_colour)
@@ -1161,6 +1197,7 @@ def make_console(
 
     Notes:
         If scrollbar=True, pack/grid the `.container`, not the text widget.
+        Mousewheel events are captured by the console and do not propagate to parent.
     """
     bg_colour_resolved = resolve_colour(bg_colour)
 
@@ -1172,6 +1209,19 @@ def make_console(
     fg_hex = TEXT_COLOURS.get(fg_colour, TEXT_COLOURS["WHITE"])
     font_fam = font_family if font_family else GUI_FONT_FAMILY_MONO[0]
     font_size = FONT_SIZES.get(size, FONT_SIZES["SMALL"])
+
+    def _on_mousewheel(event: tk.Event) -> str:
+        """Handle mousewheel and stop propagation to parent."""
+        text.yview_scroll(-1 if event.delta > 0 else 1, "units")
+        return "break"  # Stop propagation to global handler
+
+    def _on_mousewheel_linux(event: tk.Event) -> str:
+        """Handle Linux mousewheel (Button-4/5) and stop propagation."""
+        if event.num == 4:
+            text.yview_scroll(-1, "units")
+        elif event.num == 5:
+            text.yview_scroll(1, "units")
+        return "break"  # Stop propagation to global handler
 
     if scrollbar:
         container = tk.Frame(parent, bg=bg_hex)
@@ -1185,13 +1235,115 @@ def make_console(
         sb.pack(side="right", fill="y")
         text.pack(side="left", fill="both", expand=True)
         text.container = container  # type: ignore[attr-defined]
+
+        # Bind mousewheel to scroll console, not page
+        text.bind("<MouseWheel>", _on_mousewheel)
+        text.bind("<Button-4>", _on_mousewheel_linux)
+        text.bind("<Button-5>", _on_mousewheel_linux)
+
         return text
     else:
-        return tk.Text(
+        text = tk.Text(
             parent, width=width, height=height, wrap=wrap, bg=bg_hex, fg=fg_hex,
             font=(font_fam, font_size), relief="flat",
             state="disabled" if readonly else "normal", **kwargs,
         )
+
+        # Bind mousewheel even without scrollbar (for consistency)
+        text.bind("<MouseWheel>", _on_mousewheel)
+        text.bind("<Button-4>", _on_mousewheel_linux)
+        text.bind("<Button-5>", _on_mousewheel_linux)
+
+        return text
+
+
+def make_scrollable_frame(
+    parent: tk.Misc | tk.Widget,
+    bg_colour: str | ColourFamily | None = None,
+    bg_shade: ShadeType | None = None,
+) -> tuple[ttk.Frame, tk.Canvas, ttk.Frame]:
+    """
+    Description:
+        Create a scrollable frame container with vertical scrollbar.
+
+    Args:
+        parent: The parent widget.
+        bg_colour: Background colour for the canvas. If None, uses default.
+        bg_shade: Background shade. Defaults to LIGHT if bg_colour provided.
+
+    Returns:
+        tuple[ttk.Frame, tk.Canvas, ttk.Frame]: (outer_frame, canvas, scrollable_frame).
+        Pack/grid the outer_frame. Add content to scrollable_frame.
+
+    Raises:
+        None.
+
+    Notes:
+        The scrollable_frame auto-updates scroll region on configure.
+        Bind mousewheel to canvas for scroll support.
+    """
+    outer = ttk.Frame(parent)
+
+    bg_colour_resolved = resolve_colour(bg_colour)
+    if bg_colour_resolved is not None:
+        if bg_shade is None:
+            bg_shade = "LIGHT"
+        bg_hex = bg_colour_resolved[bg_shade]
+        canvas = tk.Canvas(outer, highlightthickness=0, bg=bg_hex)
+    else:
+        canvas = tk.Canvas(outer, highlightthickness=0)
+
+    scrollbar = ttk.Scrollbar(outer, orient="vertical", command=canvas.yview)
+    scrollable = ttk.Frame(canvas)
+
+    scrollable.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+    window_id = canvas.create_window((0, 0), window=scrollable, anchor="nw")
+    canvas.configure(yscrollcommand=scrollbar.set)
+    
+    # Make scrollable frame stretch to canvas width
+    canvas.bind("<Configure>", lambda e: canvas.itemconfig(window_id, width=e.width))
+
+    canvas.pack(side="left", fill="both", expand=True)
+    scrollbar.pack(side="right", fill="y")
+
+    # Bind mousewheel scrolling
+    def _on_mousewheel(event: Any) -> None:
+        canvas.yview_scroll(-1 if event.delta > 0 else 1, "units")
+
+    canvas.bind_all("<MouseWheel>", _on_mousewheel)
+
+    return outer, canvas, scrollable
+
+
+def make_notebook(
+    parent: tk.Misc | tk.Widget,
+    **kwargs: Any,
+) -> ttk.Notebook:
+    """
+    Description:
+        Create a tabbed notebook container.
+
+    Args:
+        parent: The parent widget.
+        **kwargs: Additional ttk.Notebook arguments.
+
+    Returns:
+        ttk.Notebook: The notebook widget. Add tabs with .add(frame, text="Tab Name").
+
+    Raises:
+        None.
+
+    Notes:
+        Each tab should be a frame created with make_frame() or similar.
+    """
+    return ttk.Notebook(parent, **kwargs)
+
+
+# Re-export Tkinter variable classes for convenience
+StringVar = tk.StringVar
+BooleanVar = tk.BooleanVar
+IntVar = tk.IntVar
+DoubleVar = tk.DoubleVar
 
 
 # ====================================================================================================
@@ -1378,11 +1530,13 @@ __all__ = [
     # Widget factories
     "make_label", "make_status_label", "StatusLabel", "make_frame", "make_entry", "make_combobox",
     "make_spinbox", "make_button", "make_checkbox", "make_radio", "make_separator", "make_spacer",
-    "make_textarea", "make_console",
+    "make_textarea", "make_console", "make_scrollable_frame", "make_notebook",
     # Treeview primitives
     "apply_treeview_styles", "make_treeview", "make_zebra_treeview",
     # Typography primitives
     "page_title", "page_subtitle", "section_title", "body_text", "small_text", "meta_text", "divider",
+    # Tkinter variable re-exports
+    "StringVar", "BooleanVar", "IntVar", "DoubleVar",
 ]
 
 
@@ -1396,37 +1550,30 @@ if __name__ == "__main__":
 
     root = tk.Tk()
     init_gui_theme()
-    root.title("G02a Widget Primitives — Smoke Test")
+    root.title("G02a Widget Primitives â€” Smoke Test")
     root.withdraw()
 
     try:
         # Test label style wrappers
         style_body = label_style_body()
-        logger.info("label_style_body() → %s", style_body)
+        logger.info("label_style_body() â†’ %s", style_body)
 
         style_heading = label_style_heading()
-        logger.info("label_style_heading() → %s", style_heading)
+        logger.info("label_style_heading() â†’ %s", style_heading)
 
         style_error = label_style_error()
-        logger.info("label_style_error() → %s", style_error)
+        logger.info("label_style_error() â†’ %s", style_error)
 
         # Test frame style wrappers
         style_surface = frame_style_surface()
-        logger.info("frame_style_surface() → %s", style_surface)
+        logger.info("frame_style_surface() â†’ %s", style_surface)
 
         style_card = frame_style_card()
-        logger.info("frame_style_card() → %s", style_card)
+        logger.info("frame_style_card() â†’ %s", style_card)
 
         # Test entry style wrappers
         style_entry = entry_style_default()
-        logger.info("entry_style_default() → %s", style_entry)
-
-        # Test button style wrappers
-        style_btn_primary = button_primary()
-        logger.info("button_primary() → %s", style_btn_primary)
-
-        style_btn_error = button_error()
-        logger.info("button_error() → %s", style_btn_error)
+        logger.info("entry_style_default() â†’ %s", style_entry)
 
         # Test widget factories
         root.deiconify()

@@ -420,6 +420,43 @@ def get_month_range(year: int, month: int) -> Tuple[date, date]:
     _, last = calendar.monthrange(year, month)
     return (first, date(year, month, last))
 
+def get_previous_month(ref_date: date | None = None, fmt: str | None = "%Y-%m") -> date | str:
+    """
+    Description:
+        Returns the first day of the previous month, optionally formatted
+        as a string.
+
+    Args:
+        ref_date (date | None): Reference date. If None, today's date is
+            used.
+        fmt (str | None): Optional format string for output. If None,
+            returns a date object. Defaults to "%Y-%m" (e.g., "2025-11").
+
+    Returns:
+        date | str: The first day of the previous month as a date object
+        (if fmt is None) or as a formatted string.
+
+    Raises:
+        None.
+
+    Notes:
+        - Handles year boundaries correctly (January → December of prior year).
+        - Default format "%Y-%m" produces sortable year-month strings.
+        - Use fmt=None to get a date object for further manipulation.
+    """
+    if ref_date is None:
+        ref_date = date.today()
+    
+    # Go to first of current month, then back one day to get into previous month
+    first_of_current = ref_date.replace(day=1)
+    last_of_previous = first_of_current - timedelta(days=1)
+    first_of_previous = last_of_previous.replace(day=1)
+    
+    if fmt is None:
+        return first_of_previous
+    
+    return first_of_previous.strftime(fmt)
+
 
 # ====================================================================================================
 # 7. DATE RANGE UTILITIES
@@ -593,6 +630,9 @@ if __name__ == "__main__":
         as_str(first_day),
         as_str(last_day),
     )
+
+    prev_month = get_previous_month()
+    logger.info("Previous month: %s", prev_month)
 
     # ------------------------------------------------------------------
     # REPORTING HELPERS

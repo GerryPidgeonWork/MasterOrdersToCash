@@ -457,12 +457,14 @@ def resolve_input_style(
     if border_colour_hex:
         style.configure(style_name, bordercolor=border_colour_hex)
 
-    # Focus / disabled state behaviour
+    # Focus / disabled / readonly state behaviour
     focus_hex = bg_family.get("MID", bg_hex)
     style.map(
         style_name,
         bordercolor=[("focus", border_colour_hex or focus_hex)],
         foreground=[("disabled", INPUT_DISABLED_FG_HEX), ("!disabled", fg_hex)],
+        fieldbackground=[("readonly", bg_hex), ("disabled", bg_hex)],  # <-- ADD THIS LINE
+        background=[("readonly", bg_hex), ("disabled", bg_hex)],  # <-- ADD THIS LINE
     )
 
     # Cache it

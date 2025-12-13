@@ -17,7 +17,7 @@
 # 1. CORE DATA & UTILITIES
 # ----------------------------------------------------------------------------------------------------
 pandas>=2.3
-numpy>=1.26                  # Required because C00 imports numpy directly
+numpy>=1.26                  
 tqdm>=4.66
 requests>=2.32
 pyyaml>=6.0.2

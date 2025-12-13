@@ -1,0 +1,4 @@
+The following commands will produce the executable files:
+
+# Scripts to run all files (Windows)
+pyinstaller --onefile --add-data "../../sql;sql" --hidden-import=pyarrow --hidden-import=snowflake.connector.pandas_tools --hidden-import=snowflake.connector.arrow_result --distpath binary_files/master_orders_to_cash/dist --workpath binary_files/master_orders_to_cash/build --specpath binary_files/master_orders_to_cash gui/G10b_gui_controller.py
