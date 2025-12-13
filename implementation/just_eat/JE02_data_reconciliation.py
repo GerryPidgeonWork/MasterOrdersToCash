@@ -78,7 +78,6 @@ logger = get_logger(__name__)
 # --- Additional project-level imports (append below this line only) ---------------------------------
 from core.C06_validation_utils import validate_directory_exists
 from core.C07_datetime_utils import format_date
-from core.C08_string_utils import parse_number
 from core.C09_io_utils import read_csv_file, save_dataframe
 from core.C11_data_processing import standardise_columns, filter_rows, convert_to_datetime
 
@@ -165,7 +164,7 @@ def load_dwh_for_period(
             .str.replace(r"[^0-9]", "", regex=True)
         )
 
-    # Convert numeric columns using C08's parse_number
+    # Convert numeric columns using vectorized pandas operations (faster than apply)
     numeric_cols = [
         "order_completed",
         "total_payment_with_tips_inc_vat",
@@ -179,7 +178,7 @@ def load_dwh_for_period(
     ]
     for col in numeric_cols:
         if col in combined.columns:
-            combined[col] = combined[col].apply(lambda x: parse_number(x) or 0.0)
+            combined[col] = pd.to_numeric(combined[col], errors="coerce").fillna(0.0)
 
     # Convert date columns using C11's convert_to_datetime
     if "created_at_day" in combined.columns:

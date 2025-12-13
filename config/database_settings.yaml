@@ -1,0 +1,73 @@
+# ====================================================================================================
+# database_settings.yaml
+# ----------------------------------------------------------------------------------------------------
+# Configuration for Snowflake connections, SQL execution, and bulk operations.
+#
+# This file separates infrastructure settings from business logic.
+# ====================================================================================================
+
+# ----------------------------------------------------------------------------------------------------
+# SNOWFLAKE CONNECTION
+# ----------------------------------------------------------------------------------------------------
+# Connection settings for Snowflake data warehouse.
+# Used by: core/C14_snowflake_connector.py
+# ----------------------------------------------------------------------------------------------------
+snowflake:
+  account: "gopuff"
+  authenticator: "externalbrowser"  # Okta SSO
+  warehouse: "TRANSFORMING"
+  database: "ANALYTICS"
+  schema: "DBT_PRODUCTION"
+  role: "TRANSFORMER"
+
+  # Connection timeout settings
+  connection_timeout: 120  # seconds
+  network_timeout: 300     # seconds
+
+  # Query execution settings
+  query_timeout: 3600      # 1 hour max query time
+  statement_timeout: 7200  # 2 hours for long-running statements
+
+
+# ----------------------------------------------------------------------------------------------------
+# BULK OPERATIONS
+# ----------------------------------------------------------------------------------------------------
+# Settings for efficient bulk data loading and temp table operations.
+# Used by: implementation/dwh/DWH01_dwh_extract.py
+# ----------------------------------------------------------------------------------------------------
+bulk_operations:
+  # Temp table upload chunk size (rows per batch)
+  upload_chunk_size: 25000
+
+  # Progress logging interval (log every N chunks)
+  log_progress_every: 1
+
+  # Enable parallel uploads (requires thread-safe connection)
+  parallel_uploads: false
+
+
+# ----------------------------------------------------------------------------------------------------
+# SQL FILE PATHS
+# ----------------------------------------------------------------------------------------------------
+# Relative paths to SQL query templates.
+# Used by: implementation/dwh/DWH01_dwh_extract.py
+# ----------------------------------------------------------------------------------------------------
+sql_queries:
+  order_level: "sql/S01_order_level.sql"
+  item_level: "sql/S02_item_level.sql"
+
+
+# ----------------------------------------------------------------------------------------------------
+# DATA PROCESSING
+# ----------------------------------------------------------------------------------------------------
+# Settings for DataFrame operations and memory management.
+# ----------------------------------------------------------------------------------------------------
+data_processing:
+  # Maximum rows to load in memory before warning
+  max_rows_warning: 1000000
+
+  # DataFrame dtype optimization
+  optimize_dtypes: true
+
+  # Low memory mode for CSV reading
+  csv_low_memory: false

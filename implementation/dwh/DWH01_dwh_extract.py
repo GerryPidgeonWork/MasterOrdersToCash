@@ -180,6 +180,9 @@ def run_order_level_query(
 
     sql_path = SQL_DIR / "S01_order_level.sql"
     sql_text = sql_path.read_text(encoding="utf-8")
+
+    # Template substitution (safe: dates validated in get_date_range_from_period)
+    # Snowflake Python connector doesn't support named parameters in raw SQL
     sql_text = sql_text.replace("{{start_date}}", start_date)
     sql_text = sql_text.replace("{{end_date}}", end_date)
 

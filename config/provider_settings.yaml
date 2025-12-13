@@ -1,0 +1,115 @@
+# ====================================================================================================
+# provider_settings.yaml
+# ----------------------------------------------------------------------------------------------------
+# Configuration for payment provider filtering, column mappings, and reconciliation rules.
+#
+# This file centralizes provider-specific business logic to avoid hardcoding in Python modules.
+# ====================================================================================================
+
+# ----------------------------------------------------------------------------------------------------
+# PROVIDER FILTER RULES
+# ----------------------------------------------------------------------------------------------------
+# Defines how to identify orders belonging to each provider from the DWH extract.
+# Used by: implementation/dwh/DWH01_dwh_extract.py
+# ----------------------------------------------------------------------------------------------------
+provider_filters:
+  braintree:
+    vendor_group: "dtc"
+    payment_system_exclude: "paypal"
+
+  paypal:
+    vendor_group: "dtc"
+    payment_system: "paypal"
+
+  uber:
+    order_vendor: "uber"
+
+  deliveroo:
+    order_vendor: "deliveroo"
+
+  justeat:
+    order_vendor: ["just eat", "justeat"]
+
+  amazon:
+    order_vendor: "amazon uk"
+
+
+# ----------------------------------------------------------------------------------------------------
+# COLUMN RENAME MAPPINGS
+# ----------------------------------------------------------------------------------------------------
+# Maps DWH export columns to standardized internal field names.
+# Used by: implementation/just_eat/JE02_data_reconciliation.py
+# ----------------------------------------------------------------------------------------------------
+column_mappings:
+  justeat_dwh:
+    id_obfuscated: gp_order_id_obfuscated
+    order_id: gp_order_id
+    partner_customer_order_number: mp_order_id
+    ops_day: gp_date
+    order_completed: order_completed
+    mfc_name: mfc_name
+    blended_vat_rate: blended_vat_rate
+    alc_products_total_price_local: alcohol_products_total
+    non_alc_products_total_price_local: non_alcohol_products_total
+    total_inc_tips_local: total_excl_bag_fee
+    bag_fee: bag_fee
+    total: total_incl_bag_fee
+    order_vendor: order_vendor
+    id: id
+    dbt_updated_at: dbt_updated_at
+    fam_exclusive_savings_local: fam_exclusive_savings_local
+    products_total_price_local: products_total_price_local
+    coupon_discount_local: coupon_discount_local
+    vendor_coupon_discount_local: vendor_coupon_discount_local
+    growth_coupon_discount_local: growth_coupon_discount_local
+    order_total_discount_local: order_total_discount_local
+    delivery_fee_local: delivery_fee_local
+    priority_fee_local: priority_fee_local
+    small_order_fee_local: small_order_fee_local
+    subtotal_exc_tips_local: subtotal_exc_tips_local
+    tips_local: tips_local
+
+  justeat_statement:
+    order_id: je_order_id
+    date: je_date
+    total_incl_vat: je_total
+    refund_amount: je_refund
+    type: transaction_type
+    source_file: source_file
+    statement_start: statement_start
+    order_type: order_type
+    statement_end: statement_end
+    payment_date: payment_date
+
+
+# ----------------------------------------------------------------------------------------------------
+# RECONCILIATION SETTINGS
+# ----------------------------------------------------------------------------------------------------
+# Provider-specific reconciliation tolerance and matching rules.
+# ----------------------------------------------------------------------------------------------------
+reconciliation:
+  justeat:
+    variance_tolerance: 0.01  # £0.01 tolerance for floating-point differences
+    auto_match_threshold: 0.00  # Exact match required
+
+  uber:
+    variance_tolerance: 0.02
+    auto_match_threshold: 0.00
+
+  deliveroo:
+    variance_tolerance: 0.01
+    auto_match_threshold: 0.00
+
+
+# ----------------------------------------------------------------------------------------------------
+# FOLDER STRUCTURE
+# ----------------------------------------------------------------------------------------------------
+# Defines the provider-specific folder hierarchy within Google Drive.
+# Used by: implementation/I01_project_set_file_paths.py
+# ----------------------------------------------------------------------------------------------------
+provider_folders:
+  subpaths:
+    - "01_CSVs"
+    - "02_PDFs"
+    - "03_DWH"
+    - "04_Consolidated Output"
