@@ -82,15 +82,15 @@ logger = get_logger(__name__)
 
 # --- Additional project-level imports (append below this line only) ----------------------------------
 # GUI foundation - tk and ttk needed for type hints only
-from gui.G00a_gui_packages import tk, ttk, DateEntry
+from gui.G00a_gui_packages import tk, ttk
 
 # --- G02a: Widget Primitives + Design Tokens (THE FACADE) -------------------------------------------
 from gui.G02a_widget_primitives import (
     # Spacing tokens (re-exported from G01a)
     SPACING_XS, SPACING_SM, SPACING_MD, SPACING_LG, SPACING_XL,
     # Widget factories (THE PROPER WAY TO CREATE WIDGETS)
-    make_label, make_status_label, make_frame, make_entry, make_combobox, make_spinbox, make_button, 
-    make_checkbox, make_radio, make_textarea, make_console, make_treeview, make_zebra_treeview, 
+    make_label, make_status_label, make_frame, make_entry, make_combobox, make_spinbox, make_date_picker, make_button,
+    make_checkbox, make_radio, make_textarea, make_console, make_treeview, make_zebra_treeview,
     make_separator, make_spacer, make_scrollable_frame, make_notebook,
     # Typography helpers
     page_title, section_title, page_subtitle, body_text, small_text, meta_text, divider,
@@ -103,9 +103,6 @@ from gui.G02b_layout_utils import (
     layout_row, layout_col, grid_configure, stack_vertical, stack_horizontal, apply_padding, 
     fill_remaining, center_in_parent
 )
-
-# --- G02c: Base Window -------------------------------------------------------------------------------
-from gui.G02c_gui_base import BaseWindow
 
 # --- G03a: Layout Patterns ---------------------------------------------------------------------------
 from gui.G03a_layout_patterns import (
@@ -345,6 +342,20 @@ class MainPage:
         self.dwh_extract_button: ttk.Button = None
         self.dwh_status_label: ttk.Label = None
 
+        # Braintree Card
+        self.bt_month_label: ttk.Label = None  # Shows selected month from accounting period
+        self.bt_step1_btn: ttk.Button = None  # Download statements button
+        self.bt_step2_btn: ttk.Button = None  # Reconciliation button
+        self.bt_status: Any = None  # Status indicator
+
+        # Deliveroo Card
+        self.dr_stmt_start_entry: Any = None  # DateEntry widget
+        self.dr_stmt_end_entry: Any = None  # DateEntry widget
+        self.dr_auto_end_label: ttk.Label = None  # Shows calculated Sunday
+        self.dr_step1_btn: ttk.Button = None  # Parse CSVs button
+        self.dr_step2_btn: ttk.Button = None  # Reconciliation button
+        self.dr_status: Any = None  # Status indicator
+
         # Just Eat Card
         self.je_stmt_start_entry: Any = None  # DateEntry widget
         self.je_stmt_end_entry: Any = None  # DateEntry widget
@@ -421,7 +432,7 @@ class MainPage:
             text=APP_TITLE, size="TITLE", bold=True,
             fg_colour=ACCENT_COLOUR,
             bg_colour=PAGE_COLOUR, bg_shade=PAGE_SHADE,
-        ).pack(anchor="center", pady=(0, 0))
+        ).pack(anchor="center", padx=(0, 0), pady=(0, 0))
 
         if APP_SUBTITLE:
             make_label(
@@ -429,7 +440,7 @@ class MainPage:
                 text=APP_SUBTITLE, size="BODY",
                 fg_colour=ACCENT_COLOUR,
                 bg_colour=PAGE_COLOUR, bg_shade=PAGE_SHADE,
-            ).pack(anchor="center", pady=(0, SPACING_XS))
+            ).pack(anchor="center", padx=(0, 0), pady=(0, SPACING_XS))
 
     # ------------------------------------------------------------------------------------------------
     # ROW 1 — Overview & Console
@@ -448,7 +459,7 @@ class MainPage:
                 text=ROW_1_TITLE, size="HEADING", bold=True,
                 fg_colour=ACCENT_COLOUR,
                 bg_colour=PAGE_COLOUR, bg_shade=PAGE_SHADE,
-            ).pack(anchor="w", pady=(SPACING_MD, SPACING_SM))
+            ).pack(anchor="w", padx=(0, 0), pady=(SPACING_MD, SPACING_SM))
 
         # ====================================================================================================
         # 2. ROW STRUCTURE
@@ -476,7 +487,7 @@ class MainPage:
             border_weight="MEDIUM", border_colour="PRIMARY", border_shade="MID",
             padding="MD",
         )
-        col0.grid(row=0, column=0, sticky="nsew", padx=(0, SPACING_SM))
+        col0.grid(row=0, column=0, sticky="nsew", padx=(0, SPACING_SM), pady=(0, 0))
 
         col1 = make_frame(
             row,
@@ -484,7 +495,7 @@ class MainPage:
             border_weight="MEDIUM", border_colour="PRIMARY", border_shade="MID",
             padding="MD",
         )
-        col1.grid(row=0, column=1, sticky="nsew", padx=(0, SPACING_MD))
+        col1.grid(row=0, column=1, sticky="nsew", padx=(0, SPACING_MD), pady=(0, 0))
 
         # ====================================================================================================
         # 4. COLUMN 0 — OVERVIEW TEXT BLOCK
@@ -507,13 +518,14 @@ class MainPage:
             text="Overview", bold=True,
             fg_colour=ACCENT_COLOUR,
             bg_colour=PAGE_COLOUR, bg_shade=PAGE_SHADE,
-        ).pack(anchor="w")
+        ).pack(anchor="w", padx=(0, 0), pady=(0, 0))
 
         body_text(
             col0.content,
             text=overview_text,
+            fg_colour=ACCENT_COLOUR,
             bg_colour=PAGE_COLOUR, bg_shade=PAGE_SHADE,
-        ).pack(anchor="w", pady=(SPACING_SM, 0))
+        ).pack(anchor="w", padx=(0, 0), pady=(SPACING_SM, 0))
 
         # ====================================================================================================
         # 5. COLUMN 1 — CONSOLE OUTPUT BLOCK
@@ -527,7 +539,7 @@ class MainPage:
             text="Console", bold=True,
             fg_colour=ACCENT_COLOUR,
             bg_colour=PAGE_COLOUR, bg_shade=PAGE_SHADE,
-        ).pack(anchor="w")
+        ).pack(anchor="w", padx=(0, 0), pady=(0, 0))
 
         self.console_text = make_console(
             col1.content,
@@ -554,7 +566,7 @@ class MainPage:
                 text=ROW_2_TITLE, size="HEADING", bold=True,
                 fg_colour=ACCENT_COLOUR,
                 bg_colour=PAGE_COLOUR, bg_shade=PAGE_SHADE,
-            ).pack(anchor="w", pady=(0, SPACING_SM))
+            ).pack(anchor="w", padx=(0, 0), pady=(0, SPACING_SM))
 
         # ====================================================================================================
         # 2. ROW STRUCTURE
@@ -583,7 +595,7 @@ class MainPage:
             border_weight="MEDIUM", border_colour=ACCENT_COLOUR,
             padding="MD",
         )
-        col0.grid(row=0, column=0, sticky="nsew", padx=(0, SPACING_SM))
+        col0.grid(row=0, column=0, sticky="nsew", padx=(0, SPACING_SM), pady=(0, 0))
 
         col1 = make_frame(
             row,
@@ -591,7 +603,7 @@ class MainPage:
             border_weight="MEDIUM", border_colour="PRIMARY", border_shade="MID",
             padding="MD",
         )
-        col1.grid(row=0, column=1, sticky="nsew", padx=(0, SPACING_SM))
+        col1.grid(row=0, column=1, sticky="nsew", padx=(0, SPACING_SM), pady=(0, 0))
 
         col2 = make_frame(
             row,
@@ -599,7 +611,7 @@ class MainPage:
             border_weight="MEDIUM", border_colour="PRIMARY", border_shade="MID",
             padding="MD",
         )
-        col2.grid(row=0, column=2, sticky="nsew", padx=(0, SPACING_SM))
+        col2.grid(row=0, column=2, sticky="nsew", padx=(0, SPACING_SM), pady=(0, 0))
 
         col3 = make_frame(
             row,
@@ -607,7 +619,7 @@ class MainPage:
             border_weight="MEDIUM", border_colour="PRIMARY", border_shade="MID",
             padding="MD",
         )
-        col3.grid(row=0, column=3, sticky="nsew", padx=(0, SPACING_SM))
+        col3.grid(row=0, column=3, sticky="nsew", padx=(0, SPACING_SM), pady=(0, 0))
 
         # ====================================================================================================
         # 4. CARD 0 — GOOGLE DRIVE / LOCAL
@@ -620,14 +632,14 @@ class MainPage:
             col0.content,
             text="Google Drive / Local", bold=True,
             fg_colour=ACCENT_COLOUR,
-            bg_colour=PAGE_COLOUR,
-        ).pack(anchor="w")
+            bg_colour=PAGE_COLOUR, bg_shade=PAGE_SHADE,
+        ).pack(anchor="w", padx=(0, 0), pady=(0, 0))
 
         col0_widget_container = make_frame(
             col0.content,
-            bg_colour=PAGE_COLOUR,
+            bg_colour=PAGE_COLOUR, bg_shade=PAGE_SHADE,
         )
-        col0_widget_container.pack(anchor="w", fill="x", padx=SPACING_SM, pady=(SPACING_XS, 0))
+        col0_widget_container.pack(anchor="w", fill="x", padx=(SPACING_SM, 0), pady=(SPACING_XS, 0))
 
         self.google_drive_mode_var = tk.StringVar(value="local")
 
@@ -635,21 +647,23 @@ class MainPage:
         api_radio = make_radio(
             col0_widget_container.content,
             text="Use Google Drive API", value="api", variable=self.google_drive_mode_var,
-            bg_colour=PAGE_COLOUR, bg_shade="DARK",
+            fg_colour="SECONDARY",
+            bg_colour="PRIMARY", bg_shade="LIGHT",
         )
-        api_radio.grid(row=0, column=0, sticky="w", pady=(0, SPACING_XS))
+        api_radio.grid(row=0, column=0, sticky="w", padx=(0, 0), pady=(0, SPACING_XS))
         api_radio.configure(state="disabled")  # Grey out - not yet available
 
         # Local mapped drive option (default)
         make_radio(
             col0_widget_container.content,
             text="Use Local Mapped Drive", value="local", variable=self.google_drive_mode_var,
-            bg_colour=PAGE_COLOUR, bg_shade="DARK",
-        ).grid(row=1, column=0, sticky="w")
+            fg_colour="SECONDARY",
+            bg_colour="PRIMARY", bg_shade="LIGHT",
+        ).grid(row=1, column=0, sticky="w", padx=(0, 0), pady=(0, 0))
 
         col0_widget_container.content.columnconfigure(0, weight=1)
 
-        make_spacer(col0_widget_container.content, height=SPACING_SM).grid(row=2, column=0)
+        make_spacer(col0_widget_container.content, height=SPACING_SM).grid(row=2, column=0, padx=(0, 0), pady=(0, 0))
 
         # Account selection combobox
         self.google_drive_account_var = tk.StringVar(value="")
@@ -660,9 +674,9 @@ class MainPage:
         account_label = make_label(
             col0_widget_container.content,
             text="Select Account:",
-            bg_colour=PAGE_COLOUR
+            bg_colour=PAGE_COLOUR, bg_shade=PAGE_SHADE,
         )
-        account_label.grid(row=3, column=0, sticky="w", pady=(0, SPACING_XS))
+        account_label.grid(row=3, column=0, sticky="w", padx=(0, 0), pady=(0, SPACING_XS))
 
         self.google_drive_account_combo = make_combobox(
             col0_widget_container.content,
@@ -672,7 +686,7 @@ class MainPage:
             values=combo_values,
             state="readonly",
         )
-        self.google_drive_account_combo.grid(row=4, column=0, sticky="ew", pady=(0, SPACING_XS))
+        self.google_drive_account_combo.grid(row=4, column=0, sticky="ew", padx=(0, 0), pady=(0, SPACING_XS))
 
         # Set placeholder text
         self.google_drive_account_combo.set("Detecting accounts...")
@@ -681,9 +695,9 @@ class MainPage:
         self.google_drive_status = make_status_label(
             col0.content,
             text_ok="Status: Connected", text_error="Status: Not Connected",
-            bg_colour=PAGE_COLOUR,
+            bg_colour=PAGE_COLOUR, bg_shade=PAGE_SHADE,
         )
-        self.google_drive_status.pack(anchor="w", pady=(SPACING_SM, 0))
+        self.google_drive_status.pack(anchor="w", padx=(0, 0), pady=(SPACING_SM, 0))
 
         # ====================================================================================================
         # 5. CARD 1 — SNOWFLAKE INTEGRATION
@@ -699,14 +713,14 @@ class MainPage:
             col1.content,
             text="Snowflake Integration", bold=True,
             fg_colour=ACCENT_COLOUR,
-            bg_colour=PAGE_COLOUR,
-        ).pack(anchor="w")
+            bg_colour=PAGE_COLOUR, bg_shade=PAGE_SHADE,
+        ).pack(anchor="w", padx=(0, 0), pady=(0, 0))
 
         col1_widget_container = make_frame(
             col1.content,
-            bg_colour=PAGE_COLOUR,
+            bg_colour=PAGE_COLOUR, bg_shade=PAGE_SHADE,
         )
-        col1_widget_container.pack(anchor="w", fill="x", padx=SPACING_SM, pady=(SPACING_XS, 0))
+        col1_widget_container.pack(anchor="w", fill="x", padx=(SPACING_SM, SPACING_SM), pady=(SPACING_XS, 0))
 
         self.snowflake_user_var = tk.StringVar(value="default")
         self.snowflake_email_var = tk.StringVar(value="")
@@ -720,9 +734,10 @@ class MainPage:
             text=f"Default: {SNOWFLAKE_DEFAULT_LABEL}",
             value="default",
             variable=self.snowflake_user_var,
-            bg_colour=PAGE_COLOUR, bg_shade="DARK",
+            fg_colour="SECONDARY",
+            bg_colour="PRIMARY", bg_shade="LIGHT",
         )
-        self.snowflake_default_radio.grid(row=0, column=0, sticky="ew", pady=(0, SPACING_XS))
+        self.snowflake_default_radio.grid(row=0, column=0, sticky="ew", padx=(0, 0), pady=(0, SPACING_XS))
 
         # Custom email option
         make_radio(
@@ -730,15 +745,17 @@ class MainPage:
             text="Custom Email",
             value="custom",
             variable=self.snowflake_user_var,
-            bg_colour=PAGE_COLOUR, bg_shade="DARK",
-        ).grid(row=1, column=0, sticky="ew", pady=(0, SPACING_XS))
+            fg_colour="SECONDARY",
+            bg_colour="PRIMARY", bg_shade="LIGHT",
+        ).grid(row=1, column=0, sticky="ew", padx=(0, 0), pady=(0, SPACING_XS))
 
         self.snowflake_email_entry = make_entry(
             col1.content,
             textvariable=self.snowflake_email_var,
             size="BODY",
+            padding="XS",
         )
-        self.snowflake_email_entry.pack(fill="x", padx=SPACING_SM, pady=(0, SPACING_XS))
+        self.snowflake_email_entry.pack(fill="x", padx=(SPACING_SM, SPACING_SM), pady=(0, SPACING_XS))
 
         self.snowflake_connect_btn = make_button(
             col1.content,
@@ -746,14 +763,14 @@ class MainPage:
             fg_colour="SECONDARY",
             bg_colour="PRIMARY", bg_shade="LIGHT",
         )
-        self.snowflake_connect_btn.pack(anchor="w", padx=SPACING_SM, pady=(0, SPACING_XS))
+        self.snowflake_connect_btn.pack(anchor="w", padx=(SPACING_SM, 0), pady=(0, SPACING_XS))
 
         self.snowflake_status = make_status_label(
             col1.content,
             text_ok="Snowflake: Connected", text_error="Snowflake: Not Connected",
-            bg_colour=PAGE_COLOUR,
+            bg_colour=PAGE_COLOUR, bg_shade=PAGE_SHADE,
         )
-        self.snowflake_status.pack(anchor="w")
+        self.snowflake_status.pack(anchor="w", padx=(0, 0), pady=(0, 0))
 
         # ====================================================================================================
         # 6. CARD 2 — ACCOUNTING PERIOD
@@ -766,14 +783,14 @@ class MainPage:
             text="Accounting Period", bold=True,
             fg_colour=ACCENT_COLOUR,
             bg_colour=PAGE_COLOUR, bg_shade=PAGE_SHADE
-        ).pack(anchor="w")
+        ).pack(anchor="w", padx=(0, 0), pady=(0, 0))
 
         make_label(
             col2.content,
             text=f"Enter the accounting period you want to work on.\nLeave blank to use the default: {DEFAULT_ACCOUNTING_PERIOD}",
             fg_colour=ACCENT_COLOUR,
             bg_colour=PAGE_COLOUR, bg_shade=PAGE_SHADE
-        ).pack(anchor="w", pady=(0, SPACING_SM))
+        ).pack(anchor="w", padx=(0, 0), pady=(0, SPACING_SM))
 
         self.accounting_period_var = StringVar(value="")  # <-- ADD THIS LINE
 
@@ -783,27 +800,23 @@ class MainPage:
             width=15,
             padding="XS"
         )
-        self.accounting_period_entry.pack(anchor="w", padx=(SPACING_SM), pady=(0, SPACING_XS))
+        self.accounting_period_entry.pack(anchor="w", padx=(SPACING_SM, 0), pady=(0, SPACING_XS))
 
         make_label(
             col2.content,
-            text="Format: YYYY-MM (e.g., 2025-11)",
+            text="Format: YYYY-MM (e.g., 2025-11)", size="SMALL",
             fg_colour="GREY",
-            bg_colour=PAGE_COLOUR,
-            bg_shade=PAGE_SHADE,
-            size="SMALL"
-        ).pack(anchor="w")
+            bg_colour=PAGE_COLOUR, bg_shade=PAGE_SHADE,
+        ).pack(anchor="w", padx=(0, 0), pady=(0, 0))
 
         # Validation feedback label (hidden by default, shown on error)
         self.accounting_period_error = make_label(
             col2.content,
-            text="",
+            text="", size="SMALL",
             fg_colour="ERROR",
-            bg_colour=PAGE_COLOUR,
-            bg_shade=PAGE_SHADE,
-            size="SMALL"
+            bg_colour=PAGE_COLOUR, bg_shade=PAGE_SHADE,
         )
-        self.accounting_period_error.pack(anchor="w")
+        self.accounting_period_error.pack(anchor="w", padx=(0, 0), pady=(0, 0))
 
 
         # ====================================================================================================
@@ -817,9 +830,8 @@ class MainPage:
             col3.content,
             text="Data Warehouse", bold=True,
             fg_colour=ACCENT_COLOUR,
-            bg_colour=PAGE_COLOUR,
-            bg_shade=PAGE_SHADE
-        ).pack(anchor="w")
+            bg_colour=PAGE_COLOUR, bg_shade=PAGE_SHADE
+        ).pack(anchor="w", padx=(0, 0), pady=(0, 0))
 
         make_label(
             col3.content,
@@ -829,9 +841,8 @@ class MainPage:
                 "accounting period."
             ),
             fg_colour=ACCENT_COLOUR,
-            bg_colour=PAGE_COLOUR,
-            bg_shade=PAGE_SHADE
-        ).pack(anchor="w", pady=(0, SPACING_SM))
+            bg_colour=PAGE_COLOUR, bg_shade=PAGE_SHADE
+        ).pack(anchor="w", padx=(0, 0), pady=(0, SPACING_SM))
 
         self.dwh_extract_button = make_button(
             col3.content,
@@ -839,16 +850,15 @@ class MainPage:
             fg_colour="SECONDARY",
             bg_colour="PRIMARY", bg_shade="LIGHT",
         )
-        self.dwh_extract_button.pack(anchor="w", padx=SPACING_SM, pady=(0, SPACING_XS))
+        self.dwh_extract_button.pack(anchor="w", padx=(SPACING_SM, 0), pady=(0, SPACING_XS))
 
         self.dwh_status_label = make_label(
             col3.content,
-            text="",
+            text="", size="SMALL",
             fg_colour="ERROR",
-            size="SMALL",
             bg_colour=PAGE_COLOUR, bg_shade=PAGE_SHADE
         )
-        self.dwh_status_label.pack(anchor="w")
+        self.dwh_status_label.pack(anchor="w", padx=(0, 0), pady=(0, 0))
 
 
     # ------------------------------------------------------------------------------------------------
@@ -869,7 +879,7 @@ class MainPage:
                 text=ROW_3_TITLE, size="HEADING", bold=True,
                 fg_colour=ACCENT_COLOUR,
                 bg_colour=PAGE_COLOUR, bg_shade=PAGE_SHADE,
-            ).pack(anchor="w", pady=(SPACING_MD, SPACING_SM))
+            ).pack(anchor="w", padx=(0, 0), pady=(SPACING_MD, SPACING_SM))
 
         # ====================================================================================================
         # 2. ROW STRUCTURE
@@ -895,7 +905,7 @@ class MainPage:
             border_weight="MEDIUM", border_colour=ACCENT_COLOUR,
             padding="MD",
         )
-        col0.grid(row=0, column=0, sticky="nsew", padx=(0, SPACING_SM))
+        col0.grid(row=0, column=0, sticky="nsew", padx=(0, SPACING_SM), pady=(0, 0))
 
         col1 = make_frame(
             row,
@@ -903,7 +913,7 @@ class MainPage:
             border_weight="MEDIUM", border_colour="PRIMARY", border_shade="MID",
             padding="MD",
         )
-        col1.grid(row=0, column=1, sticky="nsew", padx=(0, SPACING_SM))
+        col1.grid(row=0, column=1, sticky="nsew", padx=(0, SPACING_SM), pady=(0, 0))
 
         col2 = make_frame(
             row,
@@ -911,7 +921,7 @@ class MainPage:
             border_weight="MEDIUM", border_colour="PRIMARY", border_shade="MID",
             padding="MD",
         )
-        col2.grid(row=0, column=2, sticky="nsew", padx=(0, SPACING_SM))
+        col2.grid(row=0, column=2, sticky="nsew", padx=(0, SPACING_SM), pady=(0, 0))
 
         col3 = make_frame(
             row,
@@ -919,7 +929,7 @@ class MainPage:
             border_weight="MEDIUM", border_colour="PRIMARY", border_shade="MID",
             padding="MD",
         )
-        col3.grid(row=0, column=3, sticky="nsew", padx=(0, SPACING_SM))
+        col3.grid(row=0, column=3, sticky="nsew", padx=(0, SPACING_SM), pady=(0, 0))
 
         # ====================================================================================================
         # 4. CARD 0 — BRAINTREE
@@ -932,9 +942,8 @@ class MainPage:
             col0.content,
             text="Braintree", bold=True,
             fg_colour=ACCENT_COLOUR,
-            bg_colour=PAGE_COLOUR,
-
-        ).pack(anchor="w")
+            bg_colour=PAGE_COLOUR, bg_shade=PAGE_SHADE,
+        ).pack(anchor="w", padx=(0, 0), pady=(0, 0))
 
         # --- Description ---
         make_label(
@@ -942,7 +951,67 @@ class MainPage:
             text="Process Braintree monthly statements and reconcile\nwith Data Warehouse orders.",
             fg_colour=ACCENT_COLOUR,
             bg_colour=PAGE_COLOUR, bg_shade=PAGE_SHADE
-        ).pack(anchor="w", pady=(SPACING_XS, SPACING_SM))
+        ).pack(anchor="w", padx=(0, 0), pady=(SPACING_XS, SPACING_SM))
+
+        # --- Statement Period (Monthly) ---
+        make_label(
+            col0.content,
+            text="Statement Period (Monthly):", size="SMALL", bold=True,
+            fg_colour=ACCENT_COLOUR,
+            bg_colour=PAGE_COLOUR, bg_shade=PAGE_SHADE,
+        ).pack(anchor="w", padx=(0, 0), pady=(0, SPACING_XS))
+
+        self.bt_month_label = make_label(
+            col0.content,
+            text="Month: (set accounting period above)", size="SMALL", italic=True,
+            fg_colour="GREY",
+            bg_colour=PAGE_COLOUR, bg_shade=PAGE_SHADE,
+        )
+        self.bt_month_label.pack(anchor="w", padx=(0, 0), pady=(0, SPACING_SM))
+
+        # --- Separator ---
+        make_separator(col0.content).pack(fill="x", padx=(0, 0), pady=(SPACING_SM, SPACING_SM))
+
+        # --- Action Buttons ---
+        btn_frame = make_frame(
+            col0.content,
+            bg_colour=PAGE_COLOUR, bg_shade=PAGE_SHADE,
+            border_weight=None,
+            padding=None,
+        )
+        btn_frame.pack(anchor="w", fill="x", padx=(0, 0), pady=(0, SPACING_XS))
+
+        # Step 1: Parse CSVs
+        self.bt_step1_btn = make_button(
+            btn_frame.content,
+            text="Step 1: Parse CSVs",
+            fg_colour="WHITE",
+            bg_colour="PRIMARY", bg_shade="MID",
+        )
+        self.bt_step1_btn.pack(anchor="w", padx=(0, 0), pady=(0, SPACING_XS))
+
+        # Step 2: Reconciliation
+        self.bt_step2_btn = make_button(
+            btn_frame.content,
+            text="Step 2: Reconciliation",
+            fg_colour="WHITE",
+            bg_colour="PRIMARY", bg_shade="MID",
+        )
+        self.bt_step2_btn.pack(anchor="w", padx=(0, 0), pady=(0, SPACING_XS))
+
+        # --- Status Indicator ---
+        self.bt_status = make_status_label(
+            col0.content,
+            text_ok="Status: Ready",
+            text_error="Status: Not Ready",
+            fg_colour_ok="SUCCESS",
+            fg_colour_error="WARNING",
+            bg_colour=PAGE_COLOUR, bg_shade=PAGE_SHADE,
+            size="SMALL",
+            bold=True,
+            initial_ok=False,
+        )
+        self.bt_status.pack(anchor="w", padx=(0, 0), pady=(SPACING_XS, 0))
 
         # ====================================================================================================
         # 5. CARD 1 - UBER EATS
@@ -955,8 +1024,8 @@ class MainPage:
             col1.content,
             text="Uber Eats", bold=True,
             fg_colour=ACCENT_COLOUR,
-            bg_colour=PAGE_COLOUR,
-        ).pack(anchor="w")
+            bg_colour=PAGE_COLOUR, bg_shade=PAGE_SHADE,
+        ).pack(anchor="w", padx=(0, 0), pady=(0, 0))
 
         # ====================================================================================================
         # 6. CARD 2 - DELIVEROO
@@ -969,8 +1038,139 @@ class MainPage:
             col2.content,
             text="Deliveroo", bold=True,
             fg_colour=ACCENT_COLOUR,
-            bg_colour=PAGE_COLOUR,
-        ).pack(anchor="w")
+            bg_colour=PAGE_COLOUR, bg_shade=PAGE_SHADE,
+        ).pack(anchor="w", padx=(0, 0), pady=(0, 0))
+
+        # --- Description ---
+        make_label(
+            col2.content,
+            text="Process Deliveroo weekly statements and reconcile\nwith Data Warehouse orders.",
+            fg_colour=ACCENT_COLOUR,
+            bg_colour=PAGE_COLOUR, bg_shade=PAGE_SHADE
+        ).pack(anchor="w", padx=(0, 0), pady=(SPACING_XS, SPACING_SM))
+
+        # --- Statement Period Section ---
+        stmt_period_frame = make_frame(
+            col2.content,
+            bg_colour=PAGE_COLOUR, bg_shade=PAGE_SHADE,
+            border_weight=None,
+            padding=None,
+        )
+        stmt_period_frame.pack(anchor="w", fill="x", padx=(0, 0), pady=(0, SPACING_SM))
+
+        make_label(
+            stmt_period_frame.content,
+            text="Statement Period (Mon → Sun weeks):", size="SMALL", bold=True,
+            fg_colour=ACCENT_COLOUR,
+            bg_colour=PAGE_COLOUR, bg_shade=PAGE_SHADE,
+        ).pack(anchor="w", padx=(0, 0), pady=(0, SPACING_XS))
+
+        # Date entry row
+        date_row = make_frame(
+            stmt_period_frame.content,
+            bg_colour=PAGE_COLOUR, bg_shade=PAGE_SHADE,
+            border_weight=None,
+            padding=None,
+        )
+        date_row.pack(anchor="w", fill="x", padx=(0, 0), pady=(0, 0))
+
+        # Statement Start label
+        make_label(
+            date_row.content,
+            text="Start:", size="SMALL",
+            fg_colour=ACCENT_COLOUR,
+            bg_colour=PAGE_COLOUR, bg_shade=PAGE_SHADE,
+        ).grid(row=0, column=0, sticky="w", padx=(0, SPACING_XS), pady=(0, 0))
+
+        # Statement Start DateEntry
+        self.dr_stmt_start_entry = make_date_picker(
+            date_row.content,
+            width=12,
+            bg_colour=PAGE_COLOUR, bg_shade=PAGE_SHADE,
+            fg_colour="WHITE",
+            date_pattern="yyyy-mm-dd",
+        )
+        self.dr_stmt_start_entry.grid(row=0, column=1, sticky="w", padx=(0, SPACING_MD), pady=(0, 0))
+
+        # Statement End label
+        make_label(
+            date_row.content,
+            text="End:", size="SMALL",
+            fg_colour=ACCENT_COLOUR,
+            bg_colour=PAGE_COLOUR, bg_shade=PAGE_SHADE,
+        ).grid(row=0, column=2, sticky="w", padx=(0, SPACING_XS), pady=(0, 0))
+
+        # Statement End DateEntry
+        self.dr_stmt_end_entry = make_date_picker(
+            date_row.content,
+            width=12,
+            bg_colour=PAGE_COLOUR, bg_shade=PAGE_SHADE,
+            fg_colour="WHITE",
+            date_pattern="yyyy-mm-dd",
+        )
+        self.dr_stmt_end_entry.grid(row=0, column=3, sticky="w", padx=(0, 0), pady=(0, 0))
+
+        # Auto-calculated end date label (shows the Sunday)
+        self.dr_auto_end_label = make_label(
+            stmt_period_frame.content,
+            text="Statement covers: (select dates above)", size="SMALL", italic=True,
+            fg_colour="GREY",
+            bg_colour=PAGE_COLOUR, bg_shade=PAGE_SHADE,
+        )
+        self.dr_auto_end_label.pack(anchor="w", padx=(0, 0), pady=(SPACING_XS, 0))
+
+        # --- Separator ---
+        make_separator(col2.content).pack(fill="x", padx=(0, 0), pady=(SPACING_SM, SPACING_SM))
+
+        # --- Action Buttons ---
+        btn_frame = make_frame(
+            col2.content,
+            bg_colour=PAGE_COLOUR, bg_shade=PAGE_SHADE,
+            border_weight=None,
+            padding=None,
+        )
+        btn_frame.pack(anchor="w", fill="x", padx=(0, 0), pady=(0, SPACING_XS))
+
+        # Step 1: Parse CSVs
+        self.dr_step1_btn = make_button(
+            btn_frame.content,
+            text="Step 1: Parse CSVs",
+            fg_colour="WHITE",
+            bg_colour="PRIMARY", bg_shade="MID",
+        )
+        self.dr_step1_btn.pack(anchor="w", padx=(0, 0), pady=(0, SPACING_XS))
+
+        # Step 2: Reconciliation
+        self.dr_step2_btn = make_button(
+            btn_frame.content,
+            text="Step 2: Reconciliation",
+            fg_colour="WHITE",
+            bg_colour="PRIMARY", bg_shade="MID",
+        )
+        self.dr_step2_btn.pack(anchor="w", padx=(0, 0), pady=(0, SPACING_XS))
+
+        # MFC Mappings button (opens dialog to view/edit mappings)
+        self.dr_mfc_mappings_btn = make_button(
+            btn_frame.content,
+            text="MFC Mappings",
+            fg_colour="WHITE",
+            bg_colour="GREY", bg_shade="MID",
+        )
+        self.dr_mfc_mappings_btn.pack(anchor="w", padx=(0, 0), pady=(0, SPACING_XS))
+
+        # --- Status Indicator ---
+        self.dr_status = make_status_label(
+            col2.content,
+            text_ok="Status: Ready",
+            text_error="Status: Not Ready",
+            fg_colour_ok="SUCCESS",
+            fg_colour_error="WARNING",
+            bg_colour=PAGE_COLOUR, bg_shade=PAGE_SHADE,
+            size="SMALL",
+            bold=True,
+            initial_ok=False,
+        )
+        self.dr_status.pack(anchor="w", padx=(0, 0), pady=(SPACING_XS, 0))
 
         # ====================================================================================================
         # 7. CARD 3 - JUST EAT
@@ -990,8 +1190,8 @@ class MainPage:
             col3.content,
             text="Just Eat", bold=True,
             fg_colour=ACCENT_COLOUR,
-            bg_colour=PAGE_COLOUR,
-        ).pack(anchor="w")
+            bg_colour=PAGE_COLOUR, bg_shade=PAGE_SHADE
+        ).pack(anchor="w", padx=(0, 0), pady=(0, 0))
 
         # --- Description ---
         make_label(
@@ -999,115 +1199,87 @@ class MainPage:
             text="Process Just Eat weekly statements and reconcile\nwith Data Warehouse orders.",
             fg_colour=ACCENT_COLOUR,
             bg_colour=PAGE_COLOUR, bg_shade=PAGE_SHADE
-        ).pack(anchor="w", pady=(SPACING_XS, SPACING_SM))
+        ).pack(anchor="w", padx=(0, 0), pady=(SPACING_XS, 0))
 
         # --- Statement Period Section ---
         stmt_period_frame = make_frame(
             col3.content,
-            bg_colour=PAGE_COLOUR,
-            border_weight=None,
-            padding=None,
+            bg_colour=PAGE_COLOUR, bg_shade=PAGE_SHADE,
         )
-        stmt_period_frame.pack(anchor="w", fill="x", pady=(0, SPACING_SM))
+        stmt_period_frame.pack(anchor="w", fill="x", padx=(0, 0), pady=(SPACING_SM, SPACING_SM))
 
         make_label(
             stmt_period_frame.content,
-            text="Statement Period (Mon → Sun weeks):",
-            fg_colour="BLACK",
-            bg_colour=PAGE_COLOUR,
-            size="SMALL",
-            bold=True,
-        ).pack(anchor="w", pady=(0, SPACING_XS))
+            text="Statement Period (Mon → Sun weeks):", size="SMALL", bold=True,
+            fg_colour=ACCENT_COLOUR,
+            bg_colour=PAGE_COLOUR, bg_shade=PAGE_SHADE,
+        ).pack(anchor="w", padx=(0, 0), pady=(0, SPACING_XS))
 
         # Date entry row
         date_row = make_frame(
             stmt_period_frame.content,
-            bg_colour=PAGE_COLOUR,
+            bg_colour=PAGE_COLOUR, bg_shade=PAGE_SHADE,
             border_weight=None,
             padding=None,
         )
-        date_row.pack(anchor="w", fill="x")
+        date_row.pack(anchor="w", fill="x", padx=(0, 0), pady=(0, 0))
 
         # Statement Start label
         make_label(
             date_row.content,
-            text="Start:",
-            fg_colour="BLACK",
-            bg_colour=PAGE_COLOUR,
-            size="SMALL",
-        ).grid(row=0, column=0, sticky="w", padx=(0, SPACING_XS))
+            text="Start:", size="SMALL",
+            fg_colour=ACCENT_COLOUR,
+            bg_colour=PAGE_COLOUR, bg_shade=PAGE_SHADE,
+        ).grid(row=0, column=0, sticky="w", padx=(0, SPACING_XS), pady=(0, 0))
 
         # Statement Start DateEntry
-        if DateEntry is not None:
-            self.je_stmt_start_entry = DateEntry(
-                date_row.content,
-                width=12,
-                background="#1976D2",  # PRIMARY colour
-                foreground="white",
-                borderwidth=2,
-                date_pattern="yyyy-mm-dd",
-            )
-            self.je_stmt_start_entry.grid(row=0, column=1, sticky="w", padx=(0, SPACING_MD))
-        else:
-            # Fallback if tkcalendar not installed
-            self.je_stmt_start_entry = make_entry(
-                date_row.content,
-                width=12,
-                size="SMALL",
-            )
-            self.je_stmt_start_entry.grid(row=0, column=1, sticky="w", padx=(0, SPACING_MD))
+        self.je_stmt_start_entry = make_date_picker(
+            date_row.content,
+            width=12,
+            bg_colour=PAGE_COLOUR, bg_shade=PAGE_SHADE,
+            fg_colour="WHITE",
+            date_pattern="yyyy-mm-dd",
+        )
+        self.je_stmt_start_entry.grid(row=0, column=1, sticky="w", padx=(0, SPACING_MD), pady=(0, 0))
 
         # Statement End label
         make_label(
             date_row.content,
-            text="End:",
-            fg_colour="BLACK",
-            bg_colour=PAGE_COLOUR,
-            size="SMALL",
-        ).grid(row=0, column=2, sticky="w", padx=(0, SPACING_XS))
+            text="End:", size="SMALL",
+            fg_colour=ACCENT_COLOUR,
+            bg_colour=PAGE_COLOUR, bg_shade=PAGE_SHADE,
+        ).grid(row=0, column=2, sticky="w", padx=(0, SPACING_XS), pady=(0, 0))
 
         # Statement End DateEntry
-        if DateEntry is not None:
-            self.je_stmt_end_entry = DateEntry(
-                date_row.content,
-                width=12,
-                background="#1976D2",  # PRIMARY colour
-                foreground="white",
-                borderwidth=2,
-                date_pattern="yyyy-mm-dd",
-            )
-            self.je_stmt_end_entry.grid(row=0, column=3, sticky="w")
-        else:
-            # Fallback if tkcalendar not installed
-            self.je_stmt_end_entry = make_entry(
-                date_row.content,
-                width=12,
-                size="SMALL",
-            )
-            self.je_stmt_end_entry.grid(row=0, column=3, sticky="w")
+        self.je_stmt_end_entry = make_date_picker(
+            date_row.content,
+            width=12,
+            bg_colour=PAGE_COLOUR, bg_shade=PAGE_SHADE,
+            fg_colour="WHITE",
+            date_pattern="yyyy-mm-dd",
+        )
+        self.je_stmt_end_entry.grid(row=0, column=3, sticky="w", padx=(0, 0), pady=(0, 0))
 
         # Auto-calculated end date label (shows the Sunday)
         self.je_auto_end_label = make_label(
             stmt_period_frame.content,
-            text="Statement covers: (select dates above)",
+            text="Statement covers: (select dates above)", size="SMALL", italic=True,
             fg_colour="GREY",
-            bg_colour=PAGE_COLOUR,
-            size="SMALL",
-            italic=True,
+            bg_colour=PAGE_COLOUR, bg_shade=PAGE_SHADE,
         )
-        self.je_auto_end_label.pack(anchor="w", pady=(SPACING_XS, 0))
+        self.je_auto_end_label.pack(anchor="w", padx=(0, 0), pady=(SPACING_XS, 0))
 
         # --- Separator ---
-        make_separator(col3.content).pack(fill="x", pady=SPACING_SM)
+        make_separator(col3.content).pack(fill="x", padx=(0, 0), pady=(SPACING_SM, SPACING_SM))
 
         # --- Action Buttons ---
         btn_frame = make_frame(
             col3.content,
-            bg_colour=PAGE_COLOUR,
+            bg_colour=PAGE_COLOUR, bg_shade=PAGE_SHADE,
             border_weight=None,
             padding=None,
         )
-        btn_frame.pack(anchor="w", fill="x", pady=(0, SPACING_SM))
+        btn_frame.pack(anchor="w", fill="x", padx=(0, 0), pady=(0, SPACING_XS))
 
         # Step 1: Parse PDFs
         self.je_step1_btn = make_button(
@@ -1116,7 +1288,7 @@ class MainPage:
             fg_colour="WHITE",
             bg_colour="PRIMARY", bg_shade="MID",
         )
-        self.je_step1_btn.pack(anchor="w", pady=(0, SPACING_XS))
+        self.je_step1_btn.pack(anchor="w", padx=(0, 0), pady=(0, SPACING_XS))
 
         # Step 2: Reconciliation
         self.je_step2_btn = make_button(
@@ -1125,7 +1297,7 @@ class MainPage:
             fg_colour="WHITE",
             bg_colour="PRIMARY", bg_shade="MID",
         )
-        self.je_step2_btn.pack(anchor="w", pady=(0, SPACING_XS))
+        self.je_step2_btn.pack(anchor="w", padx=(0, 0), pady=(0, SPACING_XS))
 
         # --- Status Indicator ---
         self.je_status = make_status_label(
@@ -1134,12 +1306,12 @@ class MainPage:
             text_error="Status: Not Ready",
             fg_colour_ok="SUCCESS",
             fg_colour_error="WARNING",
-            bg_colour=PAGE_COLOUR,
+            bg_colour=PAGE_COLOUR, bg_shade=PAGE_SHADE,
             size="SMALL",
             bold=True,
             initial_ok=False,
         )
-        self.je_status.pack(anchor="w", pady=(SPACING_XS, 0))
+        self.je_status.pack(anchor="w", padx=(0, 0), pady=(SPACING_XS, 0))
 
 
     # ------------------------------------------------------------------------------------------------
@@ -1161,7 +1333,7 @@ class MainPage:
                 text=ROW_4_TITLE, size="HEADING", bold=True,
                 fg_colour=ACCENT_COLOUR,
                 bg_colour=PAGE_COLOUR, bg_shade=PAGE_SHADE,
-            ).pack(anchor="w", pady=(SPACING_MD, SPACING_SM))
+            ).pack(anchor="w", padx=(0, 0), pady=(SPACING_MD, SPACING_SM))
 
         # ====================================================================================================
         # 2. ROW STRUCTURE
@@ -1187,7 +1359,7 @@ class MainPage:
             border_weight="MEDIUM", border_colour="PRIMARY", border_shade="MID",
             padding="MD",
         )
-        col0.grid(row=0, column=0, sticky="nsew", padx=(0, SPACING_SM))
+        col0.grid(row=0, column=0, sticky="nsew", padx=(0, SPACING_SM), pady=(0, 0))
 
         col1 = make_frame(
             row,
@@ -1195,7 +1367,7 @@ class MainPage:
             border_weight="MEDIUM", border_colour="PRIMARY", border_shade="MID",
             padding="MD",
         )
-        col1.grid(row=0, column=1, sticky="nsew", padx=(0, SPACING_SM))
+        col1.grid(row=0, column=1, sticky="nsew", padx=(0, SPACING_SM), pady=(0, 0))
 
         # Example placeholder:
         # make_label(col0.content, text="Extra content", bg_colour=PAGE_COLOUR).pack(anchor="w")

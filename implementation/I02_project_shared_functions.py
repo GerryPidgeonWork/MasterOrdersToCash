@@ -52,6 +52,7 @@ from core.C03_logging_handler import get_logger, log_exception, init_logging
 logger = get_logger(__name__)
 
 from core.C01_set_file_paths import path_exists_safely
+from core.C09_io_utils import read_csv_file, save_dataframe
 
 # Import week helpers from C07 instead of defining our own
 from core.C07_datetime_utils import (
@@ -364,3 +365,164 @@ def calculate_accrual_period(
     logger.info("📅 Accrual period: %s → %s", accrual_start, accrual_end)
 
     return accrual_start, accrual_end
+
+
+# ====================================================================================================
+# 6. MFC MAPPING FUNCTIONS (DELIVEROO)
+# ====================================================================================================
+
+def load_mfc_mapping(reference_folder: Path) -> Dict[str, str]:
+    """
+    Description:
+        Load Deliveroo MFC name mapping from CSV file.
+
+    Args:
+        reference_folder (Path): Folder containing mfc_names.csv.
+
+    Returns:
+        Dict[str, str]: Mapping of Deliveroo name -> GoPuff name.
+
+    Raises:
+        None (returns empty dict on error).
+
+    Notes:
+        - CSV must have columns: deliveroo_name, gopuff_name
+        - Returns empty dict if file doesn't exist or is empty.
+    """
+    from implementation.I03_project_static_lists import DR_MFC_MAPPING_FILENAME
+
+    csv_path = reference_folder / DR_MFC_MAPPING_FILENAME
+
+    if not path_exists_safely(csv_path):
+        logger.info("MFC mapping file not found, will create on first save: %s", csv_path)
+        return {}
+
+    try:
+        df = read_csv_file(csv_path)
+
+        if df.empty:
+            logger.info("MFC mapping file is empty: %s", csv_path)
+            return {}
+
+        # Check for expected column names, or fall back to first two columns
+        if 'deliveroo_name' in df.columns and 'gopuff_name' in df.columns:
+            col_dr = 'deliveroo_name'
+            col_gp = 'gopuff_name'
+        elif len(df.columns) >= 2:
+            # Use first two columns regardless of names
+            col_dr = df.columns[0]
+            col_gp = df.columns[1]
+            logger.info("MFC mapping using columns: '%s' → '%s'", col_dr, col_gp)
+        else:
+            logger.warning("MFC mapping CSV must have at least 2 columns")
+            return {}
+
+        # Build mapping dict
+        mapping = dict(zip(df[col_dr].astype(str), df[col_gp].astype(str)))
+        logger.info("Loaded %d MFC mappings from: %s", len(mapping), csv_path.name)
+
+        return mapping
+
+    except Exception as exc:
+        logger.error("Failed to load MFC mapping: %s", exc)
+        return {}
+
+
+def save_mfc_mapping(reference_folder: Path, mapping: Dict[str, str]) -> bool:
+    """
+    Description:
+        Save Deliveroo MFC name mapping to CSV file.
+
+    Args:
+        reference_folder (Path): Folder to save mfc_names.csv.
+        mapping (Dict[str, str]): Mapping of Deliveroo name -> GoPuff name.
+
+    Returns:
+        bool: True if saved successfully, False otherwise.
+
+    Raises:
+        None (logs error on failure).
+
+    Notes:
+        - Creates file if it doesn't exist.
+        - Overwrites existing file.
+    """
+    from implementation.I03_project_static_lists import DR_MFC_MAPPING_FILENAME
+
+    csv_path = reference_folder / DR_MFC_MAPPING_FILENAME
+
+    try:
+        # Convert dict to DataFrame
+        df = pd.DataFrame([
+            {'deliveroo_name': k, 'gopuff_name': v}
+            for k, v in sorted(mapping.items())
+        ])
+
+        # Save using core utility
+        save_dataframe(df, csv_path, backup_existing=False)
+        logger.info("Saved %d MFC mappings to: %s", len(mapping), csv_path.name)
+
+        return True
+
+    except Exception as exc:
+        logger.error("Failed to save MFC mapping: %s", exc)
+        return False
+
+
+def add_mfc_mapping(
+    reference_folder: Path,
+    deliveroo_name: str,
+    gopuff_name: str,
+) -> bool:
+    """
+    Description:
+        Add a single MFC mapping and save to CSV.
+
+    Args:
+        reference_folder (Path): Folder containing mfc_names.csv.
+        deliveroo_name (str): Deliveroo restaurant name.
+        gopuff_name (str): GoPuff location name.
+
+    Returns:
+        bool: True if added and saved successfully, False otherwise.
+
+    Raises:
+        None (logs error on failure).
+
+    Notes:
+        - Loads existing mappings, adds new one, saves back.
+        - Overwrites if deliveroo_name already exists.
+    """
+    mapping = load_mfc_mapping(reference_folder)
+    mapping[deliveroo_name.strip()] = gopuff_name.strip()
+
+    return save_mfc_mapping(reference_folder, mapping)
+
+
+def delete_mfc_mapping(reference_folder: Path, deliveroo_name: str) -> bool:
+    """
+    Description:
+        Delete a single MFC mapping and save to CSV.
+
+    Args:
+        reference_folder (Path): Folder containing mfc_names.csv.
+        deliveroo_name (str): Deliveroo restaurant name to remove.
+
+    Returns:
+        bool: True if deleted and saved successfully, False otherwise.
+
+    Raises:
+        None (logs error on failure).
+
+    Notes:
+        - No error if key doesn't exist.
+    """
+    mapping = load_mfc_mapping(reference_folder)
+
+    if deliveroo_name in mapping:
+        del mapping[deliveroo_name]
+        logger.info("Deleted MFC mapping: %s", deliveroo_name)
+    else:
+        logger.warning("MFC mapping not found for deletion: %s", deliveroo_name)
+
+    return save_mfc_mapping(reference_folder, mapping)

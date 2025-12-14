@@ -233,3 +233,135 @@ JUSTEAT_RECON_COLUMN_ORDER = [
     'alt_priority_fee_exc_vat', 'alt_small_order_fee_exc_vat',
     'alt_total_payment_with_tips_inc_vat',
 ]
+
+
+# ----------------------------------------------------------------------------------------------------
+# DELIVEROO COLUMN RENAME MAP
+# ----------------------------------------------------------------------------------------------------
+# DR_COLUMN_RENAME_MAP: Renames columns from parsed Deliveroo CSV statements to standard names.
+# Used in DR001_parse_csvs.py
+#
+# Notes:
+#   - Removes special characters (£, &, /, etc.) from column names.
+#   - Converts to lowercase with underscores for consistency.
+#   - Maps raw CSV headers to clean, standardised names.
+# ----------------------------------------------------------------------------------------------------
+
+DR_COLUMN_RENAME_MAP = {
+    # --- Identifiers ---
+    "Restaurant_Name": "restaurant_name",
+    "Order_Number": "order_number",
+    "Order_ID": "dr_order_id",
+
+    # --- Timestamps ---
+    "Delivery_Date_&_Time_(UTC)": "delivery_datetime_utc",
+
+    # --- Transaction type ---
+    "Activity": "activity",
+
+    # --- Financials (handle encoding issues with £) ---
+    "Order_Value_(£)": "order_value_gross",
+    "Order_Value_(Â£)": "order_value_gross",
+    "Adjustment_Net_(£)": "adjustment_net",
+    "Adjustment_Net_(Â£)": "adjustment_net",
+    "Deliveroo_Commission_(£)": "commission_net",
+    "Deliveroo_Commission_(Â£)": "commission_net",
+    "Commission_/_Adjustment_VAT_(£)": "commission_vat",
+    "Commission_/_Adjustment_VAT_(Â£)": "commission_vat",
+    "Total_Payable": "total_payable",
+
+    # --- Rates ---
+    "Deliveroo_Commission_Rate": "commission_rate",
+    "Commission_/_Adjustment_VAT_Rate": "vat_rate",
+
+    # --- Notes and enriched fields ---
+    "Note": "note",
+    "refund_reason": "refund_reason",
+    "party_at_fault": "party_at_fault",
+    "marketing_offer_discount": "marketing_offer_discount",
+    "adjustment_vat": "adjustment_vat",
+
+    # --- Metadata ---
+    "SourceSection": "source_section",
+    "SourceFile": "source_file",
+}
+
+# ----------------------------------------------------------------------------------------------------
+# DR_COLUMN_ORDER: Final column order for Deliveroo CSV output.
+# Used in DR001_parse_csvs.py
+# ----------------------------------------------------------------------------------------------------
+
+DR_COLUMN_ORDER = [
+    # --- Identifiers ---
+    'restaurant_name', 'mfc_name', 'order_number', 'dr_order_id',
+
+    # --- Timestamps ---
+    'delivery_datetime_utc',
+
+    # --- Transaction type and accounting category ---
+    'activity', 'accounting_category',
+
+    # --- Financials: Order value first, then commission, then adjustments ---
+    'order_value_gross', 'commission_net', 'commission_vat', 'adjustment_net', 
+    'adjustment_vat', 'total_payable', 'vat_rate', 'commission_rate', 
+
+    # --- Notes and enriched fields ---
+    'note', 'refund_reason', 'party_at_fault', 'marketing_offer_discount',
+
+    # --- Metadata ---
+    'source_section', 'source_file',
+]
+
+# ----------------------------------------------------------------------------------------------------
+# DR_ACCOUNTING_CATEGORY_MAP: Maps activity types to accounting categories for reconciliation.
+# Used in DR001_parse_csvs.py
+#
+# Categories:
+#   - Order Value & Commission: Delivery transactions (order_value_gross, commission_net/vat)
+#   - Additional Fees: Charges deducted by Deliveroo (adjustment_net/vat, negative)
+#   - Additional Payments: Credits paid to GoPuff (adjustment_net/vat, positive)
+# ----------------------------------------------------------------------------------------------------
+
+DR_ACCOUNTING_CATEGORY_MAP = {
+    # --- Order Value & Commission (Delivery transactions) ---
+    "Delivery": "Order Value & Commission",
+    "Previous Invoice: Delivery": "Order Value & Commission",
+
+    # --- Additional Fees (deductions) ---
+    "Refund debit unavailable items": "Additional Fees",
+    "Customer refund": "Additional Fees",
+    "Deliveroo commission on cancelled order": "Additional Fees",
+    "Deliveroo commission on food remake": "Additional Fees",
+    "Marketer Adverts": "Additional Fees",
+    "Cancelled order charge": "Additional Fees",
+    "Previous Invoice: Customer refund": "Additional Fees",
+
+    # --- Additional Payments (credits) ---
+    "Refund commission": "Additional Payments",
+    "Cancelled order value": "Additional Payments",
+    "Food remake order value": "Additional Payments",
+    "Contested customer refund": "Additional Payments",
+    "Bag fee": "Additional Payments",
+    "Redelivery": "Additional Payments",
+    "Other - General Increase Payout - No Tax": "Additional Payments",
+    "Marketing contribution": "Additional Payments",
+}
+
+# ----------------------------------------------------------------------------------------------------
+# DELIVEROO MFC NAME MAPPING
+# ----------------------------------------------------------------------------------------------------
+# Maps Deliveroo restaurant names to GoPuff location names for order matching.
+#
+# The mapping CSV is stored on the shared drive at:
+#   04 Deliveroo/01 CSVs/03 Reference/mfc_names.csv
+#
+# CSV format:
+#   deliveroo_name,gopuff_name
+#   "GoPuff - Manchester",Manchester
+#   "GoPuff - Birmingham",Birmingham
+#
+# If a new MFC appears in Deliveroo data but isn't mapped, the reconciliation
+# will flag it as unmatched, and users can add the mapping via the GUI.
+# ----------------------------------------------------------------------------------------------------
+
+DR_MFC_MAPPING_FILENAME = "mfc_names.csv"

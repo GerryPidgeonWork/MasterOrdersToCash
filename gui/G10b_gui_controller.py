@@ -76,7 +76,7 @@ logger = get_logger(__name__)
 # --- Additional project-level imports (append below this line only) ----------------------------------
 
 # GUI foundation
-from gui.G00a_gui_packages import tk, ttk, filedialog
+from gui.G00a_gui_packages import tk, ttk, filedialog, messagebox
 
 # Core utilities
 from core.C07_datetime_utils import (
@@ -96,7 +96,7 @@ from core.C20_google_drive_integration import (
 from core.C14_snowflake_connector import connect_to_snowflake
 
 # GUI helpers
-from core.C13_gui_helpers import show_error, show_warning, show_info
+from core.C13_gui_helpers import show_error, show_warning
 
 # Design layer
 from gui.G10a_gui_design import (
@@ -115,6 +115,10 @@ from gui.G10a_gui_design import (
 # Just Eat backend modules
 from implementation.just_eat.JE01_parse_pdfs import run_je_pdf_parser
 from implementation.just_eat.JE02_data_reconciliation import run_je_reconciliation
+
+# Deliveroo backend modules
+from implementation.deliveroo.DR001_parse_csvs import run_dr_csv_parser, get_unmapped_mfcs
+from implementation.deliveroo.DR02_data_reconciliation import run_dr_reconciliation
 
 
 # ====================================================================================================
@@ -164,12 +168,15 @@ class MainPageController:
 
         # Track whether we're programmatically updating dates (to avoid recursive events)
         self._je_updating_dates: bool = False
+        self._dr_updating_dates: bool = False
 
         self._detect_google_drive_accounts()
         self._wire_google_drive_events()
         self._wire_snowflake_events()
         self._wire_accounting_period_events()
         self._wire_dwh_events()
+        self._wire_braintree_events()
+        self._wire_deliveroo_events()
         self._wire_justeat_events()
         logger.info("MainPageController initialised")
 
@@ -306,8 +313,14 @@ class MainPageController:
                 # Sync Snowflake user selection
                 self._sync_snowflake_user_from_email(selected_value)
 
+                # Update Braintree status
+                self._update_bt_status()
+
                 # Update Just Eat status
                 self._update_je_status()
+
+                # Update Deliveroo status
+                self._update_dr_status()
                 return
 
         # If we get here, something went wrong
@@ -514,7 +527,9 @@ class MainPageController:
             else:
                 self._log_to_console(f"Accounting Period: Using default ({DEFAULT_ACCOUNTING_PERIOD})")
 
-            # Sync Just Eat statement period when accounting period changes
+            # Sync statement periods when accounting period changes
+            self._sync_bt_month()
+            self._sync_dr_statement_period()
             self._sync_je_statement_period()
 
     def _validate_accounting_period(self, value: str) -> bool:
@@ -644,6 +659,1073 @@ class MainPageController:
         finally:
             # Re-enable button
             self.design.dwh_extract_button.configure(state="normal")
+
+    # ------------------------------------------------------------------------------------------------
+    # BRAINTREE CONTROLLER
+    # ------------------------------------------------------------------------------------------------
+
+    def _wire_braintree_events(self) -> None:
+        """Wire event handlers for Braintree card."""
+        # Bind step buttons
+        if self.design.bt_step1_btn:
+            self.design.bt_step1_btn.configure(command=self._on_bt_step1_clicked)
+
+        if self.design.bt_step2_btn:
+            self.design.bt_step2_btn.configure(command=self._on_bt_step2_clicked)
+
+        # Initial sync and status update
+        self._sync_bt_month()
+        self._update_bt_status()
+
+    def _sync_bt_month(self) -> None:
+        """Update Braintree month label from accounting period."""
+        if not self.design.bt_month_label:
+            return
+
+        try:
+            accounting_period = self.get_accounting_period()
+
+            # Format as "Month: YYYY-MM"
+            label_text = f"Month: {accounting_period}"
+            self.design.bt_month_label.configure(text=label_text)
+
+            # Update status after month changes
+            self._update_bt_status()
+
+            logger.debug(f"Braintree month synced: {accounting_period}")
+
+        except Exception as e:
+            log_exception(e, context="Braintree month sync")
+            self.design.bt_month_label.configure(text="Month: (error)")
+
+    def _update_bt_status(self) -> None:
+        """Update Braintree status indicator based on prerequisites."""
+        if not self.design.bt_status:
+            return
+
+        # Check prerequisites
+        drive_connected = bool(self.design.google_drive_selected_root)
+        period_valid = bool(self.get_accounting_period())
+
+        if drive_connected and period_valid:
+            self.design.bt_status.set_ok()
+        else:
+            self.design.bt_status.set_error()
+
+    def _on_bt_step1_clicked(self) -> None:
+        """Handle Braintree Step 1 button click - Download Statements."""
+        # 1. Check Google Drive is selected
+        drive_root = self.design.google_drive_selected_root
+        if not drive_root:
+            self._log_to_console("Braintree Step 1: Please select a Google Drive account first.")
+            return
+
+        # 2. Get accounting period
+        accounting_period = self.get_accounting_period()
+        if not accounting_period:
+            self._log_to_console("Braintree Step 1: Please set a valid accounting period first.")
+            return
+
+        # 3. Log action
+        self._log_to_console(f"Braintree Step 1: Download Statements ({accounting_period})")
+        self._log_to_console("Braintree Step 1: Implementation not yet available.")
+
+        # TODO: When implementation is ready, uncomment and implement:
+        # from implementation.braintree.BT01_download_statements import run_bt_download
+        # from implementation.I01_project_set_file_paths import initialise_provider_paths, get_provider_paths
+        #
+        # # Initialise paths
+        # initialise_provider_paths(drive_root)
+        # paths = get_provider_paths("braintree")
+        #
+        # # Run download
+        # run_bt_download(
+        #     drive_root=drive_root,
+        #     accounting_period=accounting_period,
+        #     log_callback=self._log_to_console,
+        # )
+
+    def _on_bt_step2_clicked(self) -> None:
+        """Handle Braintree Step 2 button click - Reconciliation."""
+        # 1. Check Google Drive is selected
+        drive_root = self.design.google_drive_selected_root
+        if not drive_root:
+            self._log_to_console("Braintree Step 2: Please select a Google Drive account first.")
+            return
+
+        # 2. Get accounting period
+        accounting_period = self.get_accounting_period()
+        if not accounting_period:
+            self._log_to_console("Braintree Step 2: Please set a valid accounting period first.")
+            return
+
+        # 3. Log action
+        self._log_to_console(f"Braintree Step 2: Reconciliation ({accounting_period})")
+        self._log_to_console("Braintree Step 2: Implementation not yet available.")
+
+        # TODO: When implementation is ready, uncomment and implement:
+        # from implementation.braintree.BT02_data_reconciliation import run_bt_reconciliation
+        # from implementation.I01_project_set_file_paths import initialise_provider_paths, get_provider_paths
+        #
+        # # Initialise paths
+        # initialise_provider_paths(drive_root)
+        # paths = get_provider_paths("braintree")
+        #
+        # # Run reconciliation
+        # run_bt_reconciliation(
+        #     drive_root=drive_root,
+        #     accounting_period=accounting_period,
+        #     log_callback=self._log_to_console,
+        # )
+
+    # ------------------------------------------------------------------------------------------------
+    # DELIVEROO CONTROLLER
+    # ------------------------------------------------------------------------------------------------
+
+    def _wire_deliveroo_events(self) -> None:
+        """Wire event handlers for Deliveroo card.
+
+        Description:
+            Binds date selection events to snap dates to week boundaries,
+            and step buttons to their respective processing functions.
+        """
+        # Bind date entry change events
+        if self.design.dr_stmt_start_entry:
+            self.design.dr_stmt_start_entry.bind("<<DateEntrySelected>>", self._on_dr_stmt_start_changed)
+            self.design.dr_stmt_start_entry.bind("<FocusOut>", self._on_dr_stmt_start_changed)
+
+        if self.design.dr_stmt_end_entry:
+            self.design.dr_stmt_end_entry.bind("<<DateEntrySelected>>", self._on_dr_stmt_end_changed)
+            self.design.dr_stmt_end_entry.bind("<FocusOut>", self._on_dr_stmt_end_changed)
+
+        # Bind step buttons
+        if self.design.dr_step1_btn:
+            self.design.dr_step1_btn.configure(command=self._on_dr_step1_clicked)
+
+        if self.design.dr_step2_btn:
+            self.design.dr_step2_btn.configure(command=self._on_dr_step2_clicked)
+
+        # Bind MFC Mappings button
+        if hasattr(self.design, 'dr_mfc_mappings_btn') and self.design.dr_mfc_mappings_btn:
+            self.design.dr_mfc_mappings_btn.configure(command=self._on_dr_mfc_mappings_clicked)
+
+        # Initial sync of statement dates from accounting period
+        self._sync_dr_statement_period()
+
+        # Update status
+        self._update_dr_status()
+
+    def _sync_dr_statement_period(self) -> None:
+        """Auto-calculate Deliveroo statement period from accounting period.
+
+        Description:
+            Sets statement start to Monday of acc_start week and
+            statement end to Sunday of acc_end week.
+            Called when accounting period changes or on initial load.
+        """
+        if self._dr_updating_dates:
+            return
+
+        try:
+            self._dr_updating_dates = True
+
+            acc_start, acc_end = self.get_accounting_dates()
+
+            # Calculate statement boundaries using C07 week functions
+            stmt_start = get_start_of_week(acc_start)
+            stmt_end = get_end_of_week(acc_end)
+
+            # Update DateEntry widgets
+            if self.design.dr_stmt_start_entry:
+                self.design.dr_stmt_start_entry.set_date(stmt_start)
+
+            if self.design.dr_stmt_end_entry:
+                self.design.dr_stmt_end_entry.set_date(stmt_end)
+
+            # Update the auto-end label
+            self._update_dr_auto_end_label()
+
+            logger.info(f"Deliveroo statement period synced: {stmt_start} → {stmt_end}")
+
+        except Exception as e:
+            log_exception(e, context="Deliveroo statement period sync")
+
+        finally:
+            self._dr_updating_dates = False
+
+    def _on_dr_stmt_start_changed(self, event=None) -> None:
+        """Handle Deliveroo statement start date change - snap to Monday.
+
+        Description:
+            When user selects any date, snap it to the Monday of that week.
+        """
+        if self._dr_updating_dates:
+            return
+
+        try:
+            self._dr_updating_dates = True
+
+            # Get the selected date
+            selected_date = self._get_dr_date_entry_value(self.design.dr_stmt_start_entry)
+            if selected_date is None:
+                return
+
+            # Snap to Monday using C07
+            monday = get_start_of_week(selected_date)
+
+            # Update if different
+            if monday != selected_date:
+                self.design.dr_stmt_start_entry.set_date(monday)
+                self._log_to_console(f"Deliveroo: Start date snapped to Monday ({monday})")
+
+            # Update the auto-end label
+            self._update_dr_auto_end_label()
+
+        except Exception as e:
+            log_exception(e, context="Deliveroo start date change")
+
+        finally:
+            self._dr_updating_dates = False
+
+    def _on_dr_stmt_end_changed(self, event=None) -> None:
+        """Handle Deliveroo statement end date change - snap to Sunday.
+
+        Description:
+            When user selects any date, snap it to the Sunday of that week.
+        """
+        if self._dr_updating_dates:
+            return
+
+        try:
+            self._dr_updating_dates = True
+
+            # Get the selected date
+            selected_date = self._get_dr_date_entry_value(self.design.dr_stmt_end_entry)
+            if selected_date is None:
+                return
+
+            # Snap to Sunday using C07
+            sunday = get_end_of_week(selected_date)
+
+            # Update if different
+            if sunday != selected_date:
+                self.design.dr_stmt_end_entry.set_date(sunday)
+                self._log_to_console(f"Deliveroo: End date snapped to Sunday ({sunday})")
+
+            # Update the auto-end label
+            self._update_dr_auto_end_label()
+
+        except Exception as e:
+            log_exception(e, context="Deliveroo end date change")
+
+        finally:
+            self._dr_updating_dates = False
+
+    def _get_dr_date_entry_value(self, entry) -> date | None:
+        """Get date value from a Deliveroo DateEntry widget.
+
+        Args:
+            entry: DateEntry widget or ttk.Entry fallback.
+
+        Returns:
+            date | None: The date value, or None if invalid.
+        """
+        if entry is None:
+            return None
+
+        try:
+            # DateEntry has get_date() method
+            if hasattr(entry, "get_date"):
+                return entry.get_date()
+
+            # Fallback for ttk.Entry - parse string
+            date_str = entry.get().strip()
+            if date_str:
+                return datetime.strptime(date_str, "%Y-%m-%d").date()
+
+        except Exception as e:
+            logger.warning(f"Failed to parse Deliveroo date entry: {e}")
+
+        return None
+
+    def _update_dr_auto_end_label(self) -> None:
+        """Update the Deliveroo auto-end label with calculated date range.
+
+        Description:
+            Shows the statement coverage range and number of weeks.
+            Format: "Statement covers: 2025-11-03 → 2025-11-30 (4 weeks)"
+        """
+        if not self.design.dr_auto_end_label:
+            return
+
+        try:
+            stmt_start = self._get_dr_date_entry_value(self.design.dr_stmt_start_entry)
+            stmt_end = self._get_dr_date_entry_value(self.design.dr_stmt_end_entry)
+
+            if stmt_start and stmt_end:
+                weeks = count_weeks(stmt_start, stmt_end)
+                week_text = "week" if weeks == 1 else "weeks"
+                label_text = f"Statement covers: {stmt_start} → {stmt_end} ({weeks} {week_text})"
+            else:
+                label_text = "Statement covers: (select dates above)"
+
+            self.design.dr_auto_end_label.configure(text=label_text)
+
+        except Exception as e:
+            log_exception(e, context="Deliveroo auto-end label update")
+            self.design.dr_auto_end_label.configure(text="Statement covers: (error)")
+
+    def _get_dr_statement_dates(self) -> Tuple[date, date, date] | None:
+        """Get Deliveroo statement dates.
+
+        Returns:
+            Tuple[date, date, date] | None: (stmt_start, stmt_end_monday, stmt_end_sunday)
+                - stmt_start: Monday of first week
+                - stmt_end_monday: Monday of last week (for filename)
+                - stmt_end_sunday: Sunday of last week (actual end date)
+            Returns None if dates are invalid.
+        """
+        stmt_start = self._get_dr_date_entry_value(self.design.dr_stmt_start_entry)
+        stmt_end = self._get_dr_date_entry_value(self.design.dr_stmt_end_entry)
+
+        if stmt_start is None or stmt_end is None:
+            return None
+
+        # stmt_end from UI is already Sunday
+        # Calculate the Monday of that week for filename convention
+        stmt_end_monday = get_start_of_week(stmt_end)
+
+        return stmt_start, stmt_end_monday, stmt_end
+
+    def _update_dr_status(self) -> None:
+        """Update Deliveroo status indicator based on prerequisites.
+
+        Description:
+            Sets status to Ready (green) if all prerequisites are met:
+            - Google Drive connected
+            - Valid statement dates
+            Otherwise shows Not Ready (amber).
+        """
+        if not self.design.dr_status:
+            return
+
+        # Check prerequisites
+        drive_connected = bool(self.design.google_drive_selected_root)
+        dates_valid = (
+            self._get_dr_date_entry_value(self.design.dr_stmt_start_entry) is not None and
+            self._get_dr_date_entry_value(self.design.dr_stmt_end_entry) is not None
+        )
+
+        if drive_connected and dates_valid:
+            self.design.dr_status.set_ok()
+        else:
+            self.design.dr_status.set_error()
+
+    def _on_dr_step1_clicked(self) -> None:
+        """Handle Deliveroo Step 1 button click - Parse CSVs.
+
+        Description:
+            Validates prerequisites, checks for unmapped MFCs, gets statement
+            dates, and runs run_dr_csv_parser in a background thread.
+        """
+        from implementation.I01_project_set_file_paths import initialise_provider_paths, get_provider_paths
+        from implementation.I02_project_shared_functions import load_mfc_mapping
+
+        # 1. Check Google Drive is selected
+        drive_root = self.design.google_drive_selected_root
+        if not drive_root:
+            self._log_to_console("Deliveroo Step 1: Please select a Google Drive account first.")
+            show_warning("Please select a Google Drive account first.")
+            return
+
+        # 2. Get statement dates
+        dates = self._get_dr_statement_dates()
+        if dates is None:
+            self._log_to_console("Deliveroo Step 1: Please set valid statement dates first.")
+            show_warning("Please set valid statement dates first.")
+            return
+
+        stmt_start, stmt_end_monday, stmt_end_sunday = dates
+
+        # 3. Initialize provider paths
+        initialise_provider_paths(drive_root)
+        provider_paths = get_provider_paths("deliveroo")
+
+        if not provider_paths:
+            self._log_to_console("Deliveroo Step 1: Failed to initialise provider paths.")
+            show_warning("Failed to initialise Deliveroo paths.")
+            return
+
+        csv_folder = provider_paths.get("01_csvs_01_to_process")
+        output_folder = provider_paths.get("04_consolidated_output")
+        reference_folder = provider_paths.get("02_pdfs_03_reference")
+
+        if not csv_folder or not output_folder or not reference_folder:
+            self._log_to_console("Deliveroo Step 1: Provider paths not configured.")
+            show_error("Deliveroo folder paths not configured.\nCheck I01_project_set_file_paths.")
+            return
+
+        # 4. Check for unmapped MFCs before processing - parsing cannot proceed with blanks
+        self._log_to_console("Deliveroo Step 1: Checking for unmapped MFCs...")
+
+        mfc_mapping = load_mfc_mapping(reference_folder)
+        unmapped = get_unmapped_mfcs(csv_folder, stmt_start, stmt_end_sunday, mfc_mapping)
+
+        while unmapped:
+            self._log_to_console(f"Deliveroo Step 1: Found {len(unmapped)} unmapped MFC(s).")
+
+            # Show dialog to map them - returns True if user mapped all, False if cancelled
+            if not self._show_unmapped_mfc_dialog(unmapped, reference_folder):
+                self._log_to_console("Deliveroo Step 1: Cancelled - all MFCs must be mapped to proceed.")
+                show_warning("All MFCs must be mapped before parsing can proceed.\nUse the 'MFC Mappings' button to add mappings.")
+                return
+
+            # Reload mappings after dialog and re-check for any remaining unmapped
+            mfc_mapping = load_mfc_mapping(reference_folder)
+            unmapped = get_unmapped_mfcs(csv_folder, stmt_start, stmt_end_sunday, mfc_mapping)
+
+            if unmapped:
+                # This shouldn't happen if dialog enforced all mappings, but safety check
+                self._log_to_console(f"Deliveroo Step 1: Still {len(unmapped)} unmapped MFC(s) remaining.")
+
+        self._log_to_console(f"Deliveroo Step 1: All MFCs mapped ({len(mfc_mapping)} total).")
+
+        # 5. Log action and run in background thread
+        self._log_to_console(f"Deliveroo Step 1: Parse CSVs ({stmt_start} -> {stmt_end_sunday})")
+
+        # Run DR001 in background thread (pass mfc_mapping for mfc_name column)
+        thread = threading.Thread(
+            target=self._run_dr_step1_thread,
+            args=(csv_folder, output_folder, stmt_start, stmt_end_sunday, mfc_mapping),
+            daemon=True
+        )
+        thread.start()
+
+    def _run_dr_step1_thread(
+        self,
+        csv_folder: Path,
+        output_folder: Path,
+        stmt_start: date,
+        stmt_end_sunday: date,
+        mfc_mapping: Dict[str, str],
+    ) -> None:
+        """Background thread for Deliveroo Step 1 - Parse CSVs.
+
+        Args:
+            csv_folder: Path to CSV input folder.
+            output_folder: Path to consolidated output folder.
+            stmt_start: Statement period start date (Monday).
+            stmt_end_sunday: Statement period end date (Sunday).
+            mfc_mapping: Deliveroo -> GoPuff name mapping.
+        """
+        try:
+            result = run_dr_csv_parser(
+                csv_folder=csv_folder,
+                output_folder=output_folder,
+                stmt_start=stmt_start,
+                stmt_end_sunday=stmt_end_sunday,
+                mfc_mapping=mfc_mapping,
+                log_callback=self._log_to_console,
+            )
+
+            if result:
+                self._log_to_console(f"Deliveroo Step 1: Complete - {result.name}")
+            else:
+                self._log_to_console("Deliveroo Step 1: No output generated.")
+
+        except Exception as e:
+            log_exception(e, context="Deliveroo Step 1")
+            self._log_to_console(f"Deliveroo Step 1: Error - {e}")
+
+    def _on_dr_step2_clicked(self) -> None:
+        """Handle Deliveroo Step 2 button click - Reconciliation.
+
+        Description:
+            Validates prerequisites, gets statement dates, and runs
+            run_dr_reconciliation in a background thread.
+        """
+        from implementation.I01_project_set_file_paths import initialise_provider_paths, get_provider_paths
+
+        # 1. Check Google Drive is selected
+        drive_root = self.design.google_drive_selected_root
+        if not drive_root:
+            self._log_to_console("Deliveroo Step 2: Please select a Google Drive account first.")
+            show_warning("Please select a Google Drive account first.")
+            return
+
+        # 2. Get statement dates
+        dates = self._get_dr_statement_dates()
+        if dates is None:
+            self._log_to_console("Deliveroo Step 2: Please set valid statement dates first.")
+            show_warning("Please set valid statement dates first.")
+            return
+
+        stmt_start, stmt_end_monday, stmt_end_sunday = dates
+
+        # 3. Get accounting dates
+        acc_start, acc_end = self.get_accounting_dates()
+
+        # 4. Initialize provider paths
+        initialise_provider_paths(drive_root)
+        provider_paths = get_provider_paths("deliveroo")
+
+        if not provider_paths:
+            self._log_to_console("Deliveroo Step 2: Failed to initialise provider paths.")
+            show_warning("Failed to initialise Deliveroo paths.")
+            return
+
+        dwh_folder = provider_paths.get("03_dwh")
+        output_folder = provider_paths.get("04_consolidated_output")
+
+        if not dwh_folder or not output_folder:
+            self._log_to_console("Deliveroo Step 2: Provider paths not configured.")
+            show_error("Deliveroo folder paths not configured.\nCheck I01_project_set_file_paths.")
+            return
+
+        # 5. Log action and run in background thread
+        self._log_to_console(f"Deliveroo Step 2: Reconciliation ({stmt_start} -> {stmt_end_sunday})")
+
+        thread = threading.Thread(
+            target=self._run_dr_step2_thread,
+            args=(dwh_folder, output_folder, acc_start, acc_end, stmt_start, stmt_end_sunday),
+            daemon=True
+        )
+        thread.start()
+
+    def _run_dr_step2_thread(
+        self,
+        dwh_folder: Path,
+        output_folder: Path,
+        acc_start: date,
+        acc_end: date,
+        stmt_start: date,
+        stmt_end_sunday: date,
+    ) -> None:
+        """Background thread for Deliveroo Step 2 - Reconciliation.
+
+        Args:
+            dwh_folder: Path to DWH folder.
+            output_folder: Path to consolidated output folder.
+            acc_start: Accounting period start date.
+            acc_end: Accounting period end date.
+            stmt_start: Statement period start date (Monday).
+            stmt_end_sunday: Statement period end date (Sunday).
+        """
+        try:
+            result = run_dr_reconciliation(
+                dwh_folder=dwh_folder,
+                output_folder=output_folder,
+                acc_start=acc_start,
+                acc_end=acc_end,
+                stmt_start=stmt_start,
+                stmt_end_sunday=stmt_end_sunday,
+                log_callback=self._log_to_console,
+            )
+
+            if result:
+                self._log_to_console(f"Deliveroo Step 2: Complete - {result.name}")
+            else:
+                self._log_to_console("Deliveroo Step 2: No output generated.")
+
+        except Exception as e:
+            log_exception(e, context="Deliveroo Step 2")
+            self._log_to_console(f"Deliveroo Step 2: Error - {e}")
+
+    def _on_dr_mfc_mappings_clicked(self) -> None:
+        """Handle MFC Mappings button click - opens dialog to view/edit mappings.
+
+        Description:
+            Opens a modal dialog showing current Deliveroo → GoPuff MFC name mappings.
+            Users can add new mappings or delete existing ones.
+            Changes are saved immediately to the CSV file on the shared drive.
+            Uses G03d table patterns for consistent styling.
+        """
+        from implementation.I01_project_set_file_paths import initialise_provider_paths, get_provider_paths
+        from implementation.I02_project_shared_functions import load_mfc_mapping, save_mfc_mapping
+        from gui.G02a_widget_primitives import SPACING_SM, SPACING_MD, SPACING_XS, make_button
+        from gui.G03d_table_patterns import (
+            TableColumn, create_table_with_toolbar, insert_rows_zebra, get_selected_values
+        )
+
+        # 1. Check Google Drive is selected
+        drive_root = self.design.google_drive_selected_root
+        if not drive_root:
+            show_warning("Please select a Google Drive account first.")
+            return
+
+        # 2. Get reference folder path
+        initialise_provider_paths(drive_root)
+        provider_paths = get_provider_paths("deliveroo")
+
+        if not provider_paths:
+            show_error("Failed to initialise Deliveroo paths.")
+            return
+
+        reference_folder = provider_paths.get("02_pdfs_03_reference")
+        if not reference_folder:
+            show_error("Reference folder path not configured.\nExpected: 02 PDFs/03 Reference")
+            return
+
+        # 3. Load current mappings
+        mappings = load_mfc_mapping(reference_folder)
+
+        # 4. Get root window via winfo_toplevel() on existing widget
+        root_window = self.design.console_text.winfo_toplevel()
+
+        # 5. Create modal dialog
+        dialog = tk.Toplevel(root_window)
+        dialog.title("Deliveroo MFC Mappings")
+        dialog.geometry("650x500")
+        dialog.transient(root_window)
+        dialog.grab_set()
+
+        # Center the dialog
+        dialog.update_idletasks()
+        x = (dialog.winfo_screenwidth() // 2) - (650 // 2)
+        y = (dialog.winfo_screenheight() // 2) - (500 // 2)
+        dialog.geometry(f"+{x}+{y}")
+
+        # Main frame with padding
+        main_frame = ttk.Frame(dialog, padding=SPACING_MD)
+        main_frame.pack(fill="both", expand=True)
+        main_frame.columnconfigure(0, weight=1)
+        main_frame.rowconfigure(2, weight=1)
+
+        # Title label
+        ttk.Label(
+            main_frame,
+            text="Deliveroo → GoPuff MFC Name Mappings",
+            font=("Segoe UI", 12, "bold")
+        ).grid(row=0, column=0, sticky="w", pady=(0, SPACING_XS))
+
+        # Instructions
+        ttk.Label(
+            main_frame,
+            text="Map Deliveroo restaurant names to GoPuff location names for order matching.",
+            font=("Segoe UI", 9)
+        ).grid(row=1, column=0, sticky="w", pady=(0, SPACING_MD))
+
+        # 6. Create table with toolbar using G03d pattern
+        columns = [
+            TableColumn(id="deliveroo_name", heading="Deliveroo Name", width=280),
+            TableColumn(id="gopuff_name", heading="GoPuff Name", width=280),
+        ]
+
+        outer_frame, toolbar, table_result = create_table_with_toolbar(
+            main_frame, columns=columns, height=12, selectmode="browse"
+        )
+        outer_frame.grid(row=2, column=0, sticky="nsew", pady=(0, SPACING_SM))
+
+        tree = table_result.treeview
+
+        def refresh_table():
+            """Clear and repopulate the table with zebra striping."""
+            rows = [(dr_name, gp_name) for dr_name, gp_name in sorted(mappings.items())]
+            insert_rows_zebra(tree, rows, clear_existing=True)
+            count_label.configure(text=f"{len(mappings)} mapping(s)")
+
+        # 7. Add toolbar buttons using make_button for consistent styling
+        add_btn = make_button(toolbar, text="Add", fg_colour="WHITE", bg_colour="PRIMARY", bg_shade="MID")
+        add_btn.pack(side="left", padx=(0, SPACING_XS))
+
+        edit_btn = make_button(toolbar, text="Edit", fg_colour="WHITE", bg_colour="GREY", bg_shade="MID")
+        edit_btn.pack(side="left", padx=(0, SPACING_XS))
+
+        delete_btn = make_button(toolbar, text="Delete", fg_colour="WHITE", bg_colour="ERROR")
+        delete_btn.pack(side="left", padx=(0, SPACING_XS))
+
+        # Status label in toolbar
+        count_label = ttk.Label(toolbar, text=f"{len(mappings)} mapping(s)", font=("Segoe UI", 9, "italic"))
+        count_label.pack(side="right", padx=SPACING_XS)
+
+        def on_add():
+            """Open a styled dialog to add a new mapping."""
+            add_dialog = tk.Toplevel(dialog)
+            add_dialog.title("Add MFC Mapping")
+            add_dialog.geometry("420x160")
+            add_dialog.transient(dialog)
+            add_dialog.grab_set()
+            add_dialog.resizable(False, False)
+
+            # Center
+            add_dialog.update_idletasks()
+            ax = (add_dialog.winfo_screenwidth() // 2) - (420 // 2)
+            ay = (add_dialog.winfo_screenheight() // 2) - (160 // 2)
+            add_dialog.geometry(f"+{ax}+{ay}")
+
+            add_frame = ttk.Frame(add_dialog, padding=SPACING_MD)
+            add_frame.pack(fill="both", expand=True)
+
+            ttk.Label(add_frame, text="Deliveroo Name:", font=("Segoe UI", 9)).grid(
+                row=0, column=0, sticky="w", pady=SPACING_XS
+            )
+            dr_entry = ttk.Entry(add_frame, width=45)
+            dr_entry.grid(row=0, column=1, sticky="ew", pady=SPACING_XS, padx=(SPACING_XS, 0))
+
+            ttk.Label(add_frame, text="GoPuff Name:", font=("Segoe UI", 9)).grid(
+                row=1, column=0, sticky="w", pady=SPACING_XS
+            )
+            gp_entry = ttk.Entry(add_frame, width=45)
+            gp_entry.grid(row=1, column=1, sticky="ew", pady=SPACING_XS, padx=(SPACING_XS, 0))
+
+            add_frame.columnconfigure(1, weight=1)
+
+            def do_add():
+                dr_name = dr_entry.get().strip()
+                gp_name = gp_entry.get().strip()
+
+                if not dr_name or not gp_name:
+                    messagebox.showwarning("Validation", "Both fields are required.", parent=add_dialog)
+                    return
+
+                mappings[dr_name] = gp_name
+                if save_mfc_mapping(reference_folder, mappings):
+                    refresh_table()
+                    self._log_to_console(f"MFC Mapping added: {dr_name} → {gp_name}")
+                    add_dialog.destroy()
+                else:
+                    messagebox.showerror("Error", "Failed to save mapping.", parent=add_dialog)
+
+            add_btn_frame = ttk.Frame(add_frame)
+            add_btn_frame.grid(row=2, column=0, columnspan=2, pady=(SPACING_MD, 0))
+
+            save_btn = make_button(add_btn_frame, text="Save", fg_colour="WHITE", bg_colour="PRIMARY", bg_shade="MID")
+            save_btn.configure(command=do_add)
+            save_btn.pack(side="left", padx=SPACING_XS)
+
+            cancel_btn = make_button(add_btn_frame, text="Cancel", fg_colour="WHITE", bg_colour="GREY", bg_shade="MID")
+            cancel_btn.configure(command=add_dialog.destroy)
+            cancel_btn.pack(side="left", padx=SPACING_XS)
+
+            dr_entry.focus_set()
+
+        def on_edit(event=None):
+            """Open a styled dialog to edit the selected mapping."""
+            selected = get_selected_values(tree)
+            if not selected:
+                messagebox.showwarning("Selection", "Please select a mapping to edit.", parent=dialog)
+                return
+
+            old_dr_name = selected[0][0]
+            old_gp_name = selected[0][1]
+
+            edit_dialog = tk.Toplevel(dialog)
+            edit_dialog.title("Edit MFC Mapping")
+            edit_dialog.geometry("420x160")
+            edit_dialog.transient(dialog)
+            edit_dialog.grab_set()
+            edit_dialog.resizable(False, False)
+
+            # Center
+            edit_dialog.update_idletasks()
+            ex = (edit_dialog.winfo_screenwidth() // 2) - (420 // 2)
+            ey = (edit_dialog.winfo_screenheight() // 2) - (160 // 2)
+            edit_dialog.geometry(f"+{ex}+{ey}")
+
+            edit_frame = ttk.Frame(edit_dialog, padding=SPACING_MD)
+            edit_frame.pack(fill="both", expand=True)
+
+            ttk.Label(edit_frame, text="Deliveroo Name:", font=("Segoe UI", 9)).grid(
+                row=0, column=0, sticky="w", pady=SPACING_XS
+            )
+            dr_entry = ttk.Entry(edit_frame, width=45)
+            dr_entry.grid(row=0, column=1, sticky="ew", pady=SPACING_XS, padx=(SPACING_XS, 0))
+            dr_entry.insert(0, old_dr_name)
+
+            ttk.Label(edit_frame, text="GoPuff Name:", font=("Segoe UI", 9)).grid(
+                row=1, column=0, sticky="w", pady=SPACING_XS
+            )
+            gp_entry = ttk.Entry(edit_frame, width=45)
+            gp_entry.grid(row=1, column=1, sticky="ew", pady=SPACING_XS, padx=(SPACING_XS, 0))
+            gp_entry.insert(0, old_gp_name)
+
+            edit_frame.columnconfigure(1, weight=1)
+
+            def do_save():
+                new_dr_name = dr_entry.get().strip()
+                new_gp_name = gp_entry.get().strip()
+
+                if not new_dr_name or not new_gp_name:
+                    messagebox.showwarning("Validation", "Both fields are required.", parent=edit_dialog)
+                    return
+
+                # Remove old mapping if key changed
+                if new_dr_name != old_dr_name and old_dr_name in mappings:
+                    del mappings[old_dr_name]
+
+                # Add new/updated mapping
+                mappings[new_dr_name] = new_gp_name
+
+                if save_mfc_mapping(reference_folder, mappings):
+                    refresh_table()
+                    self._log_to_console(f"MFC Mapping updated: {new_dr_name} → {new_gp_name}")
+                    edit_dialog.destroy()
+                else:
+                    messagebox.showerror("Error", "Failed to save mapping.", parent=edit_dialog)
+
+            edit_btn_frame = ttk.Frame(edit_frame)
+            edit_btn_frame.grid(row=2, column=0, columnspan=2, pady=(SPACING_MD, 0))
+
+            save_btn = make_button(edit_btn_frame, text="Save", fg_colour="WHITE", bg_colour="PRIMARY", bg_shade="MID")
+            save_btn.configure(command=do_save)
+            save_btn.pack(side="left", padx=SPACING_XS)
+
+            cancel_btn = make_button(edit_btn_frame, text="Cancel", fg_colour="WHITE", bg_colour="GREY", bg_shade="MID")
+            cancel_btn.configure(command=edit_dialog.destroy)
+            cancel_btn.pack(side="left", padx=SPACING_XS)
+
+            gp_entry.focus_set()
+            gp_entry.select_range(0, "end")
+
+        def on_delete():
+            """Delete the selected mapping."""
+            selected = get_selected_values(tree)
+            if not selected:
+                messagebox.showwarning("Selection", "Please select a mapping to delete.", parent=dialog)
+                return
+
+            dr_name = selected[0][0]
+
+            if messagebox.askyesno("Confirm Delete", f"Delete mapping for '{dr_name}'?", parent=dialog):
+                if dr_name in mappings:
+                    del mappings[dr_name]
+                    if save_mfc_mapping(reference_folder, mappings):
+                        refresh_table()
+                        self._log_to_console(f"MFC Mapping deleted: {dr_name}")
+                    else:
+                        messagebox.showerror("Error", "Failed to save after deletion.", parent=dialog)
+
+        add_btn.configure(command=on_add)
+        edit_btn.configure(command=on_edit)
+        delete_btn.configure(command=on_delete)
+
+        # Double-click to edit
+        tree.bind("<Double-1>", on_edit)
+
+        # 8. Bottom button row
+        bottom_frame = ttk.Frame(main_frame)
+        bottom_frame.grid(row=3, column=0, sticky="ew", pady=(SPACING_SM, 0))
+
+        close_btn = make_button(bottom_frame, text="Close", fg_colour="WHITE", bg_colour="GREY", bg_shade="DARK")
+        close_btn.configure(command=dialog.destroy)
+        close_btn.pack(side="right")
+
+        # Initial table load
+        refresh_table()
+
+        self._log_to_console(f"MFC Mappings dialog opened ({len(mappings)} mappings)")
+
+    def _show_unmapped_mfc_dialog(self, unmapped: List[str], reference_folder: Path) -> bool:
+        """Show dialog prompting user to map unmapped MFC names.
+
+        Description:
+            Displays a modal dialog with all unmapped Deliveroo restaurant names.
+            User must provide GoPuff name for each before continuing.
+            Uses G03d table patterns for consistent styling.
+
+        Args:
+            unmapped: List of unmapped Deliveroo restaurant names.
+            reference_folder: Path to save updated mappings.
+
+        Returns:
+            bool: True if all mappings were provided, False if cancelled.
+        """
+        from implementation.I02_project_shared_functions import load_mfc_mapping, save_mfc_mapping
+        from gui.G02a_widget_primitives import SPACING_SM, SPACING_MD, SPACING_XS, make_button
+        from gui.G03d_table_patterns import (
+            TableColumn, create_table_with_toolbar, insert_rows_zebra, get_selected_values
+        )
+
+        # Load existing mappings to add to
+        mappings = load_mfc_mapping(reference_folder)
+
+        # Track completion state
+        result = {"completed": False}
+
+        # Get root window
+        root_window = self.design.console_text.winfo_toplevel()
+
+        # Create modal dialog
+        dialog = tk.Toplevel(root_window)
+        dialog.title("Map Unmapped MFCs")
+        dialog.geometry("700x550")
+        dialog.transient(root_window)
+        dialog.grab_set()
+
+        # Center the dialog
+        dialog.update_idletasks()
+        x = (dialog.winfo_screenwidth() // 2) - (700 // 2)
+        y = (dialog.winfo_screenheight() // 2) - (550 // 2)
+        dialog.geometry(f"+{x}+{y}")
+
+        # Main frame with padding
+        main_frame = ttk.Frame(dialog, padding=SPACING_MD)
+        main_frame.pack(fill="both", expand=True)
+        main_frame.columnconfigure(0, weight=1)
+        main_frame.rowconfigure(2, weight=1)
+
+        # Title label
+        ttk.Label(
+            main_frame,
+            text=f"Found {len(unmapped)} Unmapped MFC(s)",
+            font=("Segoe UI", 12, "bold")
+        ).grid(row=0, column=0, sticky="w", pady=(0, SPACING_XS))
+
+        # Instructions
+        ttk.Label(
+            main_frame,
+            text="Please provide the GoPuff location name for each Deliveroo restaurant.\n"
+                 "Double-click a row or select and click 'Set GoPuff Name' to map.",
+            font=("Segoe UI", 9)
+        ).grid(row=1, column=0, sticky="w", pady=(0, SPACING_MD))
+
+        # Create table with toolbar using G03d pattern
+        columns = [
+            TableColumn(id="deliveroo_name", heading="Deliveroo Name", width=300),
+            TableColumn(id="gopuff_name", heading="GoPuff Name", width=300),
+        ]
+
+        outer_frame, toolbar, table_result = create_table_with_toolbar(
+            main_frame, columns=columns, height=12, selectmode="browse"
+        )
+        outer_frame.grid(row=2, column=0, sticky="nsew", pady=(0, SPACING_SM))
+
+        tree = table_result.treeview
+
+        # Track pending mappings (initially all unmapped have empty GoPuff name)
+        pending_mappings: Dict[str, str] = {name: "" for name in unmapped}
+
+        def refresh_table():
+            """Clear and repopulate the table with zebra striping."""
+            rows = [(dr_name, gp_name or "(not set)") for dr_name, gp_name in sorted(pending_mappings.items())]
+            insert_rows_zebra(tree, rows, clear_existing=True)
+
+            # Count how many are still unmapped
+            unmapped_count = sum(1 for v in pending_mappings.values() if not v)
+            status_label.configure(text=f"{unmapped_count} remaining to map")
+
+            # Enable/disable continue button
+            if unmapped_count == 0:
+                continue_btn.configure(state="normal")
+            else:
+                continue_btn.configure(state="disabled")
+
+        def on_set_gopuff_name(event=None):
+            """Open dialog to set GoPuff name for selected row."""
+            selected = get_selected_values(tree)
+            if not selected:
+                messagebox.showwarning("Selection", "Please select a row to map.", parent=dialog)
+                return
+
+            dr_name = selected[0][0]
+            current_gp = pending_mappings.get(dr_name, "")
+            if current_gp == "(not set)":
+                current_gp = ""
+
+            # Create input dialog
+            input_dialog = tk.Toplevel(dialog)
+            input_dialog.title("Set GoPuff Name")
+            input_dialog.geometry("450x130")
+            input_dialog.transient(dialog)
+            input_dialog.grab_set()
+            input_dialog.resizable(False, False)
+
+            # Center
+            input_dialog.update_idletasks()
+            ix = (input_dialog.winfo_screenwidth() // 2) - (450 // 2)
+            iy = (input_dialog.winfo_screenheight() // 2) - (130 // 2)
+            input_dialog.geometry(f"+{ix}+{iy}")
+
+            input_frame = ttk.Frame(input_dialog, padding=SPACING_MD)
+            input_frame.pack(fill="both", expand=True)
+
+            ttk.Label(input_frame, text=f"Deliveroo: {dr_name}", font=("Segoe UI", 9, "bold")).grid(
+                row=0, column=0, columnspan=2, sticky="w", pady=(0, SPACING_SM)
+            )
+
+            ttk.Label(input_frame, text="GoPuff Name:", font=("Segoe UI", 9)).grid(
+                row=1, column=0, sticky="w", pady=SPACING_XS
+            )
+            gp_entry = ttk.Entry(input_frame, width=50)
+            gp_entry.grid(row=1, column=1, sticky="ew", pady=SPACING_XS, padx=(SPACING_XS, 0))
+            gp_entry.insert(0, current_gp)
+
+            input_frame.columnconfigure(1, weight=1)
+
+            def do_save():
+                gp_name = gp_entry.get().strip()
+                if not gp_name:
+                    messagebox.showwarning("Validation", "GoPuff name is required.", parent=input_dialog)
+                    return
+
+                pending_mappings[dr_name] = gp_name
+                refresh_table()
+                input_dialog.destroy()
+
+            btn_frame = ttk.Frame(input_frame)
+            btn_frame.grid(row=2, column=0, columnspan=2, pady=(SPACING_MD, 0))
+
+            save_btn = make_button(btn_frame, text="Save", fg_colour="WHITE", bg_colour="PRIMARY", bg_shade="MID")
+            save_btn.configure(command=do_save)
+            save_btn.pack(side="left", padx=SPACING_XS)
+
+            cancel_btn = make_button(btn_frame, text="Cancel", fg_colour="WHITE", bg_colour="GREY", bg_shade="MID")
+            cancel_btn.configure(command=input_dialog.destroy)
+            cancel_btn.pack(side="left", padx=SPACING_XS)
+
+            gp_entry.focus_set()
+            gp_entry.bind("<Return>", lambda e: do_save())
+
+        # Add toolbar buttons
+        set_btn = make_button(toolbar, text="Set GoPuff Name", fg_colour="WHITE", bg_colour="PRIMARY", bg_shade="MID")
+        set_btn.configure(command=on_set_gopuff_name)
+        set_btn.pack(side="left", padx=(0, SPACING_XS))
+
+        # Status label in toolbar
+        status_label = ttk.Label(toolbar, text=f"{len(unmapped)} remaining to map", font=("Segoe UI", 9, "italic"))
+        status_label.pack(side="right", padx=SPACING_XS)
+
+        # Double-click to edit
+        tree.bind("<Double-1>", on_set_gopuff_name)
+
+        # Bottom button row
+        bottom_frame = ttk.Frame(main_frame)
+        bottom_frame.grid(row=3, column=0, sticky="ew", pady=(SPACING_SM, 0))
+
+        def on_continue():
+            """Save all mappings and close dialog."""
+            # Add all new mappings to existing
+            for dr_name, gp_name in pending_mappings.items():
+                if gp_name:
+                    mappings[dr_name] = gp_name
+
+            # Save to file
+            if save_mfc_mapping(reference_folder, mappings):
+                result["completed"] = True
+                dialog.destroy()
+            else:
+                messagebox.showerror("Error", "Failed to save mappings.", parent=dialog)
+
+        def on_cancel():
+            """Cancel without saving."""
+            result["completed"] = False
+            dialog.destroy()
+
+        continue_btn = make_button(bottom_frame, text="Continue", fg_colour="WHITE", bg_colour="SUCCESS")
+        continue_btn.configure(command=on_continue, state="disabled")
+        continue_btn.pack(side="right", padx=(SPACING_XS, 0))
+
+        cancel_btn = make_button(bottom_frame, text="Cancel", fg_colour="WHITE", bg_colour="GREY", bg_shade="DARK")
+        cancel_btn.configure(command=on_cancel)
+        cancel_btn.pack(side="right")
+
+        # Initial table load
+        refresh_table()
+
+        # Wait for dialog to close
+        dialog.wait_window()
+
+        return result["completed"]
 
     # ------------------------------------------------------------------------------------------------
     # JUST EAT CONTROLLER
@@ -971,10 +2053,10 @@ class MainPageController:
 
             if result:
                 self._log_to_console(f"✅ Just Eat Step 1 complete: {result.name}")
-                show_info(f"PDF parsing complete!\n\nOutput: {result.name}")
+                # Completion message removed - user can see status in console
             else:
                 self._log_to_console("⚠️ Just Eat Step 1: No output generated.")
-                show_warning("PDF parsing completed but no output was generated.")
+                # Warning removed - logged to console instead
 
         except FileNotFoundError as e:
             self._log_to_console(f"❌ Just Eat Step 1: {e}")
@@ -1095,10 +2177,10 @@ class MainPageController:
 
             if result:
                 self._log_to_console(f"✅ Just Eat Step 2 complete: {result}")
-                show_info(f"Reconciliation complete!\n\nOutput: {result}")
+                # Completion message removed - user can see status in console
             else:
                 self._log_to_console("⚠️ Just Eat Step 2: No output generated.")
-                show_warning("Reconciliation completed but no output was generated.")
+                # Warning removed - logged to console instead
 
         except FileNotFoundError as e:
             self._log_to_console(f"❌ Just Eat Step 2: {e}")

@@ -122,7 +122,8 @@ PROVIDER_STRUCTURE: Dict[str, List[str]] = {
     ],
     "02 PDFs": [
         "01 To Process",
-        "02 Processed"
+        "02 Processed",
+        "03 Reference"
     ],
     "03 DWH": [],
     "04 Consolidated Output": [

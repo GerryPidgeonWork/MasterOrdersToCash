@@ -50,7 +50,7 @@ from core.C00_set_packages import *
 from core.C03_logging_handler import get_logger, log_exception, init_logging
 logger = get_logger(__name__)
 
-from gui.G00a_gui_packages import tk, ttk, init_gui_theme
+from gui.G00a_gui_packages import tk, ttk, init_gui_theme, DateEntry
 
 from gui.G01a_style_config import (
     GUI_PRIMARY, GUI_SECONDARY, TEXT_COLOURS,
@@ -481,13 +481,13 @@ def switch_error() -> str:
 def make_label(
     parent: tk.Misc | tk.Widget,
     text: str = "",
+    size: SizeType = "BODY",
+    bold: bool = False,
+    italic: bool = False,
+    underline: bool = False,
     fg_colour: TextColourType = "BLACK",
     bg_colour: str | ColourFamily | None = None,
     bg_shade: ShadeType | None = None,
-    size: SizeType = "BODY",
-    bold: bool = False,
-    underline: bool = False,
-    italic: bool = False,
     **kwargs: Any,
 ) -> ttk.Label:
     """
@@ -497,13 +497,13 @@ def make_label(
     Args:
         parent: The parent widget.
         text: Label text content.
+        size: Font size token.
+        bold: Whether the font weight is bold.
+        italic: Whether the text is italic.
+        underline: Whether the text is underlined.
         fg_colour: Foreground text colour token. Defaults to "BLACK".
         bg_colour: Background colour preset or colour family dict.
         bg_shade: Shade within the background family. Defaults to MID if bg_colour set.
-        size: Font size token.
-        bold: Whether the font weight is bold.
-        underline: Whether the text is underlined.
-        italic: Whether the text is italic.
         **kwargs: Additional ttk.Label arguments (anchor, width, etc.).
 
     Returns:
@@ -520,8 +520,13 @@ def make_label(
         bg_shade = cast(ShadeType, get_default_shade(bg_colour_resolved))
 
     style_name = label_style(
-        fg_colour=fg_colour, bg_colour=bg_colour_resolved, bg_shade=bg_shade,
-        size=size, bold=bold, underline=underline, italic=italic,
+        fg_colour=fg_colour,
+        bg_colour=bg_colour_resolved,
+        bg_shade=bg_shade,
+        size=size,
+        bold=bold,
+        underline=underline,
+        italic=italic,
     )
     return ttk.Label(parent, text=text, style=style_name, **kwargs)
 
@@ -608,7 +613,8 @@ def make_status_label(
         KeyError: If shade tokens are invalid for their colour families.
 
     Notes:
-        Call .set_ok() to show OK state, .set_error() to show error state.
+        This factory intentionally deviates from the standard text parameter grouping rule
+        because it represents dual semantic states (text_ok / text_error).
     """
     bg_resolved = resolve_colour(bg_colour)
     if bg_resolved is not None and bg_shade is None:
@@ -704,7 +710,7 @@ def make_entry(
     border_weight: BorderWeightType | None = "THIN",
     border_colour: str | None = None,
     border_shade: ShadeType | None = None,
-    padding: SpacingType | None = "XS",
+    padding: SpacingType | None = "SM",
     size: SizeType = "BODY",
     **kwargs: Any,
 ) -> ttk.Entry:
@@ -883,19 +889,83 @@ def make_spinbox(
     return ttk.Spinbox(parent, **spin_kwargs)
 
 
+def make_date_picker(
+    parent: tk.Misc | tk.Widget,
+    textvariable: tk.StringVar | None = None,
+    date_pattern: str = "yyyy-mm-dd",
+    bg_colour: str = "PRIMARY",
+    fg_colour: str = "WHITE",
+    width: int = 12,
+    **kwargs: Any,
+) -> tk.Widget:
+    """
+    Description:
+        Create a calendar date picker widget using tkcalendar.DateEntry if available,
+        otherwise falls back to a standard entry field.
+
+    Args:
+        parent: The parent widget.
+        textvariable: Optional StringVar to bind.
+        date_pattern: Date format pattern. Defaults to "yyyy-mm-dd".
+        bg_colour: Background colour family preset. Defaults to "PRIMARY".
+        fg_colour: Foreground text colour. Defaults to "WHITE".
+        width: Widget width in characters. Defaults to 12.
+        **kwargs: Additional DateEntry/Entry arguments.
+
+    Returns:
+        tk.Widget: DateEntry widget if tkcalendar available, otherwise ttk.Entry.
+
+    Raises:
+        None.
+
+    Notes:
+        - Widget is NOT packed/gridded; caller must place it.
+        - Uses tkcalendar.DateEntry for calendar popup when available.
+        - Falls back gracefully to make_entry() if tkcalendar not installed.
+        - Resolves colours from G01b design system (resolve_colour).
+        Design Exception:
+            This widget intentionally does not fully participate in G01/G02 style token resolution
+            due to tkcalendar.DateEntry limitations.
+    """
+    if DateEntry is not None:
+        # tkcalendar is available - create DateEntry widget
+        bg_hex = resolve_colour(bg_colour)
+        fg_hex = resolve_colour(fg_colour) if fg_colour != "WHITE" else "white"
+
+        entry_kwargs: dict[str, Any] = {
+            "width": width,
+            "background": bg_hex,
+            "foreground": fg_hex,
+            "borderwidth": 2,
+            "date_pattern": date_pattern,
+            "showweeknumbers": False,
+            "showothermonthdays": False,
+            **kwargs
+        }
+
+        if textvariable is not None:
+            entry_kwargs["textvariable"] = textvariable
+
+        return DateEntry(parent, **entry_kwargs)
+    else:
+        # tkcalendar not available - fallback to regular entry
+        logger.warning("tkcalendar not installed - using regular entry for date input")
+        return make_entry(parent, textvariable=textvariable, width=width, size="SMALL")
+
+
 def make_button(
     parent: tk.Misc | tk.Widget,
     text: str = "",
-    command: Callable[[], None] | None = None,
-    bg_colour: str | ColourFamily | None = "PRIMARY",
-    bg_shade: ShadeType | None = None,
-    fg_colour: TextColourType = "WHITE",
     size: SizeType = "BODY",
     bold: bool = False,
+    fg_colour: TextColourType = "WHITE",
+    bg_colour: str | ColourFamily | None = "PRIMARY",
+    bg_shade: ShadeType | None = None,
     border_colour: str | ColourFamily | None = None,
     border_shade: ShadeType | None = None,
     border_weight: BorderWeightType | None = "THIN",
     padding: SpacingType | tuple[int, int] | None = (SPACING_SM, 0),
+    command: Callable[[], None] | None = None,
     **kwargs: Any,
 ) -> ttk.Button:
     """
@@ -905,16 +975,16 @@ def make_button(
     Args:
         parent: The parent widget.
         text: Button text content.
-        command: Optional callback function for button click.
-        bg_colour: Background colour. Defaults to "PRIMARY".
-        bg_shade: Base shade for background. Hover/pressed states are auto-derived.
-        fg_colour: Foreground text colour token. Defaults to "WHITE".
         size: Font size token.
         bold: Whether the button text is bold.
+        fg_colour: Foreground text colour token. Defaults to "WHITE".
+        bg_colour: Background colour. Defaults to "PRIMARY".
+        bg_shade: Base shade for background. Hover/pressed states are auto-derived.
         border_colour: Border colour.
         border_shade: Shade within the border colour family.
         border_weight: Border weight token.
         padding: Internal padding. Token or tuple (h, v).
+        command: Optional callback function for button click.
         **kwargs: Additional ttk.Button arguments.
 
     Returns:
@@ -922,9 +992,6 @@ def make_button(
 
     Raises:
         KeyError: If shade tokens are invalid for their colour families.
-
-    Notes:
-        Hover/pressed states auto-derived: LIGHTâ†’MIDâ†’DARK or DARKâ†’MIDâ†’LIGHT.
     """
     bg_colour_resolved = resolve_colour(bg_colour)
     border_colour_resolved = resolve_colour(border_colour)
@@ -950,11 +1017,17 @@ def make_button(
         bg_shade_pressed = "XDARK"
 
     style_name = button_style(
-        widget_type="BUTTON", variant="PRIMARY", fg_colour=fg_colour,
-        bg_colour=bg_colour_resolved, bg_shade_normal=bg_shade,
-        bg_shade_hover=bg_shade_hover, bg_shade_pressed=bg_shade_pressed,
-        border_colour=border_colour_resolved, border_shade=border_shade,
-        border_weight=border_weight, padding=padding,
+        widget_type="BUTTON",
+        variant="PRIMARY",
+        fg_colour=fg_colour,
+        bg_colour=bg_colour_resolved,
+        bg_shade_normal=bg_shade,
+        bg_shade_hover=bg_shade_hover,
+        bg_shade_pressed=bg_shade_pressed,
+        border_colour=border_colour_resolved,
+        border_shade=border_shade,
+        border_weight=border_weight,
+        padding=padding,
     )
 
     btn_kwargs: dict[str, Any] = {"text": text, "style": style_name, **kwargs}
