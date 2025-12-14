@@ -99,14 +99,14 @@ The **Orders-to-Cash** system automates financial reconciliation between interna
 
 ### Provider Support
 
-| Provider    | Statement Format | Status       |
-|-------------|------------------|--------------|
-| Just Eat    | PDF Parsing      | ✅ Completed |
-| Uber Eats   | CSV Export       | 🚧 Planned   |
-| Deliveroo   | CSV Export       | 🚧 Planned   |
-| Braintree   | API Integration  | 🚧 Planned   |
-| PayPal      | CSV Export       | 🚧 Planned   |
-| Amazon UK   | CSV Export       | 🚧 Planned   |
+| Provider    | Statement Format | Frequency | Status       |
+|-------------|------------------|-----------|--------------|
+| Just Eat    | PDF Parsing      | Weekly    | ✅ Completed |
+| Deliveroo   | CSV Export       | Weekly    | ✅ Completed |
+| Uber Eats   | CSV Export       | Monthly   | ✅ Step 1    |
+| Braintree   | CSV Export       | Monthly   | ✅ Step 1    |
+| PayPal      | CSV Export       | Monthly   | 🚧 Planned   |
+| Amazon UK   | CSV Export       | Monthly   | 🚧 Planned   |
 
 ---
 
@@ -229,16 +229,20 @@ MasterOrdersToCash/
 │
 ├── implementation/              # Provider-specific implementations
 │   ├── I01_project_set_file_paths.py  # Provider folder structure
-│   ├── I02_project_shared_functions.py # Shared utilities
+│   ├── I02_project_shared_functions.py # Shared utilities (file renaming, MFC mapping)
 │   ├── I03_project_static_lists.py    # Column mappings, constants
 │   ├── dwh/
 │   │   └── DWH01_dwh_extract.py       # Snowflake extraction
 │   ├── just_eat/
-│   │   ├── JE01_parse_pdfs.py         # PDF statement parsing
+│   │   ├── JE01_parse_pdfs.py         # PDF statement parsing + file renaming
 │   │   └── JE02_data_reconciliation.py # Reconciliation logic
-│   ├── uber_eats/               # 🚧 Future implementation
-│   ├── deliveroo/               # 🚧 Future implementation
-│   ├── braintree/               # 🚧 Future implementation
+│   ├── deliveroo/
+│   │   ├── DR001_parse_csvs.py        # CSV parsing + file renaming
+│   │   └── DR02_data_reconciliation.py # Reconciliation logic
+│   ├── uber_eats/
+│   │   └── UE01_parse_csvs.py         # CSV parsing + file renaming
+│   ├── braintree/
+│   │   └── BT01_parse_csvs.py         # CSV parsing + file renaming
 │   └── ...
 │
 ├── sql/                         # SQL query templates
@@ -262,7 +266,13 @@ MasterOrdersToCash/
    Orders to Cash/
    └── [Provider Name]/
        ├── 01_CSVs/
+       │   ├── 01 To Process/    # Raw files go here
+       │   ├── 02 Processed/     # Renamed/processed files
+       │   └── 03 Reference/     # Lookup tables (e.g., MFC mapping)
        ├── 02_PDFs/
+       │   ├── 01 To Process/
+       │   ├── 02 Processed/
+       │   └── 03 Reference/
        ├── 03_DWH/
        └── 04_Consolidated Output/
    ```
@@ -365,7 +375,7 @@ pytest tests/ -v
 ## 🤝 Contributors
 
 - **Gerry Pidgeon** - Original Author
-- Built with assistance from **Claude Sonnet 4.5** (Anthropic)
+- Built with assistance from **Claude Opus 4.5** (Anthropic)
 
 ---
 
