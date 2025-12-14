@@ -77,12 +77,60 @@ logger = get_logger(__name__)
 from core.C07_datetime_utils import parse_date, format_date
 from core.C09_io_utils import save_dataframe
 
-from implementation.I02_project_shared_functions import statement_overlaps_range
+from implementation.I02_project_shared_functions import (
+    statement_overlaps_range,
+    rename_raw_statement_files,
+)
 from implementation.I03_project_static_lists import JET_COLUMN_RENAME_MAP
 
 
 # ====================================================================================================
-# 3. PDF TEXT EXTRACTION HELPERS
+# 3. PDF FILE RENAMING
+# ====================================================================================================
+
+# --- 3a. Regex pattern for raw JE PDF filename format ---
+# Pattern: JEInv{anything}_{DD.MM.YY}.pdf
+# Examples:
+#   - JEInv23477287GOPUFFHEADOFFICE256896_07.12.25.pdf
+#   - JEInv23414453GOPUFFHEADOFFICE256896_30.11.25.pdf
+# Note: Relaxed pattern to match any JEInv filename with underscore-separated date
+JE_RAW_FILENAME_PATTERN = re.compile(
+    r"^JEInv.+_(\d{2})\.(\d{2})\.(\d{2})\.pdf$",
+    re.IGNORECASE
+)
+
+
+def rename_je_raw_pdfs(pdf_folder: Path, log_callback: Callable[[str], None] | None = None) -> int:
+    """
+    Description:
+        Renames raw JE PDF files to standard JE Statement format.
+        Uses shared rename_raw_statement_files() from I02.
+
+    Args:
+        pdf_folder (Path): Folder containing PDF files to process.
+        log_callback (Callable[[str], None] | None): Optional callback for GUI logging.
+
+    Returns:
+        int: Number of files renamed.
+
+    Notes:
+        - Input pattern: JEInv{num}GOPUFFHEADOFFICE{num}_{DD.MM.YY}.pdf
+        - Output pattern: YY.MM.DD - JE Statement.pdf
+        - The date in the raw filename is the Sunday (end of week).
+        - Output uses the Monday (start of week) date (-6 days offset).
+    """
+    return rename_raw_statement_files(
+        folder=pdf_folder,
+        pattern=JE_RAW_FILENAME_PATTERN,
+        output_suffix="JE Statement.pdf",
+        days_offset=-6,  # Sunday → Monday
+        date_format="dmy",
+        log_callback=log_callback,
+    )
+
+
+# ====================================================================================================
+# 4. PDF TEXT EXTRACTION HELPERS
 # ====================================================================================================
 
 def get_segment_text(pdf_path: Path) -> str:
@@ -647,6 +695,11 @@ def run_je_pdf_parser(
     log("=" * 60)
     log(f"📂 PDF Folder: {pdf_folder}")
     log(f"📅 Statement Period: {stmt_start} → {stmt_end_sunday}")
+
+    # 0) Rename raw JE PDFs to standard format
+    rename_count = rename_je_raw_pdfs(pdf_folder, log_callback)
+    if rename_count > 0:
+        log(f"Renamed {rename_count} raw JE PDF(s).")
 
     # 1) Find all JE statement PDFs
     pdf_files = sorted(pdf_folder.glob("*JE Statement*.pdf"))

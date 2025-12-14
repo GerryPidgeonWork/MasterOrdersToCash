@@ -344,9 +344,15 @@ class MainPage:
 
         # Braintree Card
         self.bt_month_label: ttk.Label = None  # Shows selected month from accounting period
-        self.bt_step1_btn: ttk.Button = None  # Download statements button
+        self.bt_step1_btn: ttk.Button = None  # Parse CSVs button
         self.bt_step2_btn: ttk.Button = None  # Reconciliation button
         self.bt_status: Any = None  # Status indicator
+
+        # Uber Eats Card
+        self.ue_month_label: ttk.Label = None  # Shows selected month from accounting period
+        self.ue_step1_btn: ttk.Button = None  # Parse CSVs button
+        self.ue_step2_btn: ttk.Button = None  # Reconciliation button
+        self.ue_status: Any = None  # Status indicator
 
         # Deliveroo Card
         self.dr_stmt_start_entry: Any = None  # DateEntry widget
@@ -1016,8 +1022,11 @@ class MainPage:
         # ====================================================================================================
         # 5. CARD 1 - UBER EATS
         # ----------------------------------------------------------------------------------------------------
-        # Choose between Google Drive API or a local mapped drive. In a full implementation, this card
-        # would configure paths, mount points or credentials.
+        # Uber Eats monthly reconciliation workflow card with:
+        #   • Month display (linked to accounting period)
+        #   • Step 1: Parse CSVs button
+        #   • Step 2: Reconciliation button
+        #   • Status indicator
         # ====================================================================================================
 
         make_label(
@@ -1026,6 +1035,74 @@ class MainPage:
             fg_colour=ACCENT_COLOUR,
             bg_colour=PAGE_COLOUR, bg_shade=PAGE_SHADE,
         ).pack(anchor="w", padx=(0, 0), pady=(0, 0))
+
+        # --- Description ---
+        make_label(
+            col1.content,
+            text="Process Uber Eats monthly statements and reconcile\nwith Data Warehouse orders.",
+            fg_colour=ACCENT_COLOUR,
+            bg_colour=PAGE_COLOUR, bg_shade=PAGE_SHADE
+        ).pack(anchor="w", padx=(0, 0), pady=(SPACING_XS, SPACING_SM))
+
+        # --- Statement Period (Monthly) ---
+        make_label(
+            col1.content,
+            text="Statement Period (Monthly):", size="SMALL", bold=True,
+            fg_colour=ACCENT_COLOUR,
+            bg_colour=PAGE_COLOUR, bg_shade=PAGE_SHADE,
+        ).pack(anchor="w", padx=(0, 0), pady=(0, SPACING_XS))
+
+        self.ue_month_label = make_label(
+            col1.content,
+            text="Month: (set accounting period above)", size="SMALL", italic=True,
+            fg_colour="GREY",
+            bg_colour=PAGE_COLOUR, bg_shade=PAGE_SHADE,
+        )
+        self.ue_month_label.pack(anchor="w", padx=(0, 0), pady=(0, SPACING_SM))
+
+        # --- Separator ---
+        make_separator(col1.content).pack(fill="x", padx=(0, 0), pady=(SPACING_SM, SPACING_SM))
+
+        # --- Action Buttons ---
+        ue_btn_frame = make_frame(
+            col1.content,
+            bg_colour=PAGE_COLOUR, bg_shade=PAGE_SHADE,
+            border_weight=None,
+            padding=None,
+        )
+        ue_btn_frame.pack(anchor="w", fill="x", padx=(0, 0), pady=(0, SPACING_XS))
+
+        # Step 1: Parse CSVs
+        self.ue_step1_btn = make_button(
+            ue_btn_frame.content,
+            text="Step 1: Parse CSVs",
+            fg_colour="WHITE",
+            bg_colour="PRIMARY", bg_shade="MID",
+        )
+        self.ue_step1_btn.pack(anchor="w", padx=(0, 0), pady=(0, SPACING_XS))
+
+        # Step 2: Reconciliation
+        self.ue_step2_btn = make_button(
+            ue_btn_frame.content,
+            text="Step 2: Reconciliation",
+            fg_colour="WHITE",
+            bg_colour="PRIMARY", bg_shade="MID",
+        )
+        self.ue_step2_btn.pack(anchor="w", padx=(0, 0), pady=(0, SPACING_XS))
+
+        # --- Status Indicator ---
+        self.ue_status = make_status_label(
+            col1.content,
+            text_ok="Status: Ready",
+            text_error="Status: Not Ready",
+            fg_colour_ok="SUCCESS",
+            fg_colour_error="WARNING",
+            bg_colour=PAGE_COLOUR, bg_shade=PAGE_SHADE,
+            size="SMALL",
+            bold=True,
+            initial_ok=False,
+        )
+        self.ue_status.pack(anchor="w", padx=(0, 0), pady=(SPACING_XS, 0))
 
         # ====================================================================================================
         # 6. CARD 2 - DELIVEROO

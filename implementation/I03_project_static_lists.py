@@ -192,46 +192,98 @@ JUSTEAT_DWH_COLUMN_RENAME_MAP = {
 # ----------------------------------------------------------------------------------------------------
 
 JUSTEAT_RECON_COLUMN_ORDER = [
-    # ---- Identifiers & Reconciliation ----
-    'gp_order_id', 'gp_order_id_obfuscated', 'mp_order_id', 'statement_start',
-    'transaction_type', 'order_category', 'matched_amount', 'amount_variance',
-    'je_total', 'je_refund',
-
-    # ---- Location & Vendor ----
-    'location_name', 'order_vendor', 'vendor_group', 'order_completed',
-    'created_at_day', 'created_at_week', 'created_at_month',
-
-    # ---- DWH Financials (inc VAT) ----
-    'post_promo_sales_inc_vat', 'delivery_fee_inc_vat', 'priority_fee_inc_vat',
-    'small_order_fee_inc_vat', 'mp_bag_fee_inc_vat', 'total_payment_inc_vat',
-    'tips_amount', 'total_payment_with_tips_inc_vat',
-
-    # ---- DWH Financials (exc VAT) ----
-    'post_promo_sales_exc_vat', 'delivery_fee_exc_vat', 'priority_fee_exc_vat',
-    'small_order_fee_exc_vat', 'mp_bag_fee_exc_vat', 'total_revenue_exc_vat',
-    'cost_of_goods_inc_vat', 'cost_of_goods_exc_vat',
-
-    # ---- Item breakdown ----
-    'total_products',
-    'item_quantity_count_0', 'item_quantity_count_5', 'item_quantity_count_20',
-    'total_price_exc_vat_0', 'total_price_exc_vat_5', 'total_price_exc_vat_20',
-    'total_price_inc_vat_0', 'total_price_inc_vat_5', 'total_price_inc_vat_20',
+    # ---- Standard Reconciliation Columns ----
+    'tx_type', 'gl_account', 'accounting_period',
+    'order_matching_status', 'amount_matching_status', 'amount_variance',
 
     # ---- JE Statement fields ----
-    'je_order_id', 'je_date', 'order_type', 'source_file',
-    'statement_end', 'payment_date',
+    'je_order_id', 'je_total', 'je_refund', 'je_date',
+    'transaction_type', 'order_type', 'source_file',
+    'statement_start', 'statement_end', 'payment_date',
+
+    # ---- DWH Identifiers ----
+    'dwh_gp_order_id', 'dwh_gp_order_id_obfuscated', 'dwh_mp_order_id',
+
+    # ---- DWH Location & Vendor ----
+    'dwh_location_name', 'dwh_order_vendor', 'dwh_vendor_group', 'dwh_order_completed',
+    'dwh_created_at_day', 'dwh_created_at_week', 'dwh_created_at_month',
+
+    # ---- DWH Financials (inc VAT) ----
+    'dwh_post_promo_sales_inc_vat', 'dwh_delivery_fee_inc_vat', 'dwh_priority_fee_inc_vat',
+    'dwh_small_order_fee_inc_vat', 'dwh_mp_bag_fee_inc_vat', 'dwh_total_payment_inc_vat',
+    'dwh_tips_amount', 'dwh_total_payment_with_tips_inc_vat',
+
+    # ---- DWH Financials (exc VAT) ----
+    'dwh_post_promo_sales_exc_vat', 'dwh_delivery_fee_exc_vat', 'dwh_priority_fee_exc_vat',
+    'dwh_small_order_fee_exc_vat', 'dwh_mp_bag_fee_exc_vat', 'dwh_total_revenue_exc_vat',
+    'dwh_cost_of_goods_inc_vat', 'dwh_cost_of_goods_exc_vat',
+
+    # ---- DWH Item breakdown ----
+    'dwh_total_products',
+    'dwh_item_quantity_count_0', 'dwh_item_quantity_count_5', 'dwh_item_quantity_count_20',
+    'dwh_total_price_exc_vat_0', 'dwh_total_price_exc_vat_5', 'dwh_total_price_exc_vat_20',
+    'dwh_total_price_inc_vat_0', 'dwh_total_price_inc_vat_5', 'dwh_total_price_inc_vat_20',
 
     # ---- Additional DWH fields ----
-    'payment_system', 'braintree_tx_index', 'braintree_tx_id',
-    'created_at_timestamp', 'delivered_at_timestamp',
-    'delivered_at_day', 'delivered_at_week', 'delivered_at_month',
-    'ops_date_day', 'ops_date_week', 'ops_date_month',
-    'blended_vat_rate',
+    'dwh_payment_system', 'dwh_braintree_tx_index', 'dwh_braintree_tx_id',
+    'dwh_created_at_timestamp', 'dwh_delivered_at_timestamp',
+    'dwh_delivered_at_day', 'dwh_delivered_at_week', 'dwh_delivered_at_month',
+    'dwh_ops_date_day', 'dwh_ops_date_week', 'dwh_ops_date_month',
+    'dwh_blended_vat_rate',
 
-    # ---- Alternate metrics ----
-    'alt_post_promo_sales_inc_vat', 'alt_delivery_fee_exc_vat',
-    'alt_priority_fee_exc_vat', 'alt_small_order_fee_exc_vat',
-    'alt_total_payment_with_tips_inc_vat',
+    # ---- DWH Alternate metrics ----
+    'dwh_alt_post_promo_sales_inc_vat', 'dwh_alt_delivery_fee_exc_vat',
+    'dwh_alt_priority_fee_exc_vat', 'dwh_alt_small_order_fee_exc_vat',
+    'dwh_alt_total_payment_with_tips_inc_vat',
+]
+
+
+# ----------------------------------------------------------------------------------------------------
+# DELIVEROO_RECON_COLUMN_ORDER: Final column order for Deliveroo reconciliation output.
+# Used in DR02_data_reconciliation.py
+# ----------------------------------------------------------------------------------------------------
+
+DELIVEROO_RECON_COLUMN_ORDER = [
+    # ---- Identifiers ----
+    'dwh_gp_order_id', 'dwh_gp_order_id_obfuscated', 'dwh_mp_order_id', 'mp_order_id',
+
+    # ---- Standard Reconciliation Columns ----
+    'tx_type', 'refund_reason', 'party_at_fault', 'gl_account',
+    'mp_accounting_category', 'dwh_order_completed',
+    'accounting_period', 'order_matching_status', 'amount_matching_status',
+
+    # ---- DWH Location & Vendor ----
+    'dwh_order_vendor', 'dwh_location_name',
+
+    # ---- DWH Date fields ----
+    'dwh_created_at_day', 'dwh_created_at_week', 'dwh_created_at_month',
+    'dwh_delivered_at_day', 'dwh_delivered_at_week', 'dwh_delivered_at_month',
+    'dwh_ops_date_day', 'dwh_ops_date_week', 'dwh_ops_date_month',
+    'dwh_created_at_timestamp', 'dwh_delivered_at_timestamp',
+
+    # ---- DWH Transaction fields ----
+    'dwh_payment_system', 'dwh_braintree_tx_index', 'dwh_braintree_tx_id',
+
+    # ---- Deliveroo Financials ----
+    'order_value_gross', 'commission_net', 'commission_vat', 'commission_gross',
+    'adjustment_net', 'adjustment_vat', 'adjustment_gross', 'total_payable',
+
+    # ---- DWH Financials (inc VAT) ----
+    'dwh_post_promo_sales_inc_vat', 'dwh_delivery_fee_inc_vat', 'dwh_priority_fee_inc_vat',
+    'dwh_small_order_fee_inc_vat', 'dwh_mp_bag_fee_inc_vat', 'dwh_total_payment_inc_vat',
+    'dwh_tips_amount', 'dwh_total_payment_with_tips_inc_vat',
+
+    # ---- DWH Financials (exc VAT) ----
+    'dwh_post_promo_sales_exc_vat', 'dwh_delivery_fee_exc_vat', 'dwh_priority_fee_exc_vat',
+    'dwh_small_order_fee_exc_vat', 'dwh_mp_bag_fee_exc_vat', 'dwh_total_revenue_exc_vat',
+    'dwh_cost_of_goods_inc_vat', 'dwh_cost_of_goods_exc_vat',
+
+    # ---- DWH Item breakdown ----
+    'dwh_total_products',
+    'dwh_item_quantity_count_0', 'dwh_item_quantity_count_5', 'dwh_item_quantity_count_20',
+    'dwh_blended_vat_rate',
+    'dwh_total_price_exc_vat_0', 'dwh_total_price_exc_vat_5', 'dwh_total_price_exc_vat_20',
+    'dwh_total_price_inc_vat_0', 'dwh_total_price_inc_vat_5', 'dwh_total_price_inc_vat_20',
 ]
 
 

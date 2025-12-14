@@ -120,6 +120,12 @@ from implementation.just_eat.JE02_data_reconciliation import run_je_reconciliati
 from implementation.deliveroo.DR001_parse_csvs import run_dr_csv_parser, get_unmapped_mfcs
 from implementation.deliveroo.DR02_data_reconciliation import run_dr_reconciliation
 
+# Braintree backend modules
+from implementation.braintree.BT01_parse_csvs import rename_braintree_files
+
+# Uber Eats backend modules
+from implementation.uber_eats.UE01_parse_csvs import rename_uber_eats_files
+
 
 # ====================================================================================================
 # 3. DATE HELPER FUNCTIONS
@@ -176,6 +182,7 @@ class MainPageController:
         self._wire_accounting_period_events()
         self._wire_dwh_events()
         self._wire_braintree_events()
+        self._wire_uber_eats_events()
         self._wire_deliveroo_events()
         self._wire_justeat_events()
         logger.info("MainPageController initialised")
@@ -316,6 +323,9 @@ class MainPageController:
                 # Update Braintree status
                 self._update_bt_status()
 
+                # Update Uber Eats status
+                self._update_ue_status()
+
                 # Update Just Eat status
                 self._update_je_status()
 
@@ -363,8 +373,11 @@ class MainPageController:
             # Manual selection doesn't have an email, reset Snowflake to require custom
             self._sync_snowflake_user_from_email("")
 
-            # Update Just Eat status
+            # Update all provider statuses
+            self._update_bt_status()
+            self._update_ue_status()
             self._update_je_status()
+            self._update_dr_status()
 
         except Exception as e:
             log_exception(e, context="Google Drive folder selection")
@@ -529,6 +542,7 @@ class MainPageController:
 
             # Sync statement periods when accounting period changes
             self._sync_bt_month()
+            self._sync_ue_month()
             self._sync_dr_statement_period()
             self._sync_je_statement_period()
 
@@ -713,37 +727,79 @@ class MainPageController:
             self.design.bt_status.set_error()
 
     def _on_bt_step1_clicked(self) -> None:
-        """Handle Braintree Step 1 button click - Download Statements."""
+        """Handle Braintree Step 1 button click - Rename CSVs.
+
+        Description:
+            Validates prerequisites, gets CSV folder path, and runs
+            rename_braintree_files to standardise filenames based on
+            transaction dates within each file.
+        """
+        from implementation.I01_project_set_file_paths import initialise_provider_paths, get_provider_paths
+
         # 1. Check Google Drive is selected
         drive_root = self.design.google_drive_selected_root
         if not drive_root:
             self._log_to_console("Braintree Step 1: Please select a Google Drive account first.")
+            show_warning("Please select a Google Drive account first.")
             return
 
-        # 2. Get accounting period
-        accounting_period = self.get_accounting_period()
-        if not accounting_period:
-            self._log_to_console("Braintree Step 1: Please set a valid accounting period first.")
+        # 2. Initialize provider paths
+        initialise_provider_paths(drive_root)
+        provider_paths = get_provider_paths("braintree")
+
+        if not provider_paths:
+            self._log_to_console("Braintree Step 1: Failed to initialise provider paths.")
+            show_warning("Failed to initialise Braintree paths.")
             return
 
-        # 3. Log action
-        self._log_to_console(f"Braintree Step 1: Download Statements ({accounting_period})")
-        self._log_to_console("Braintree Step 1: Implementation not yet available.")
+        csv_folder = provider_paths.get("01_csvs_01_to_process")
 
-        # TODO: When implementation is ready, uncomment and implement:
-        # from implementation.braintree.BT01_download_statements import run_bt_download
-        # from implementation.I01_project_set_file_paths import initialise_provider_paths, get_provider_paths
-        #
-        # # Initialise paths
-        # initialise_provider_paths(drive_root)
-        # paths = get_provider_paths("braintree")
-        #
-        # # Run download
-        # run_bt_download(
-        #     drive_root=drive_root,
-        #     accounting_period=accounting_period,
-        #     log_callback=self._log_to_console,
-        # )
+        if not csv_folder:
+            self._log_to_console("Braintree Step 1: CSV folder path not configured.")
+            show_error("Braintree CSV folder path not configured.\nCheck I01_project_set_file_paths.")
+            return
+
+        if not csv_folder.exists():
+            self._log_to_console(f"Braintree Step 1: CSV folder does not exist: {csv_folder}")
+            show_error(f"Braintree CSV folder does not exist:\n{csv_folder}")
+            return
+
+        # 3. Disable button and run
+        self.design.bt_step1_btn.configure(state="disabled")
+        self._log_to_console(f"Braintree Step 1: Renaming CSVs in {csv_folder}...")
+
+        # 4. Run in background thread
+        import threading
+        threading.Thread(
+            target=self._run_bt_step1_thread,
+            args=(csv_folder,),
+            daemon=True
+        ).start()
+
+    def _run_bt_step1_thread(self, csv_folder: Path) -> None:
+        """Background thread for Braintree Step 1 - Rename CSVs.
+
+        Args:
+            csv_folder: Path to Braintree CSV folder.
+        """
+        try:
+            renamed_count = rename_braintree_files(
+                csv_folder=csv_folder,
+                log_callback=self._log_to_console,
+            )
+
+            if renamed_count > 0:
+                self._log_to_console(f"✅ Braintree Step 1 complete: Renamed {renamed_count} file(s).")
+            else:
+                self._log_to_console("⚠️ Braintree Step 1: No files renamed (already in standard format or no files found).")
+
+        except Exception as e:
+            log_exception(e, context="Braintree Step 1")
+            self._log_to_console(f"❌ Braintree Step 1 error: {e}")
+
+        finally:
+            # Re-enable button
+            self.design.bt_step1_btn.configure(state="normal")
 
     def _on_bt_step2_clicked(self) -> None:
         """Handle Braintree Step 2 button click - Reconciliation."""
@@ -777,6 +833,153 @@ class MainPageController:
         #     accounting_period=accounting_period,
         #     log_callback=self._log_to_console,
         # )
+
+    # ------------------------------------------------------------------------------------------------
+    # UBER EATS CONTROLLER
+    # ------------------------------------------------------------------------------------------------
+
+    def _wire_uber_eats_events(self) -> None:
+        """Wire event handlers for Uber Eats card."""
+        # Bind step buttons
+        if self.design.ue_step1_btn:
+            self.design.ue_step1_btn.configure(command=self._on_ue_step1_clicked)
+
+        if self.design.ue_step2_btn:
+            self.design.ue_step2_btn.configure(command=self._on_ue_step2_clicked)
+
+        # Initial sync and status update
+        self._sync_ue_month()
+        self._update_ue_status()
+
+    def _sync_ue_month(self) -> None:
+        """Update Uber Eats month label from accounting period."""
+        if not self.design.ue_month_label:
+            return
+
+        try:
+            accounting_period = self.get_accounting_period()
+
+            # Format as "Month: YYYY-MM"
+            label_text = f"Month: {accounting_period}"
+            self.design.ue_month_label.configure(text=label_text)
+
+            # Update status after month changes
+            self._update_ue_status()
+
+            logger.debug(f"Uber Eats month synced: {accounting_period}")
+
+        except Exception as e:
+            log_exception(e, context="Uber Eats month sync")
+            self.design.ue_month_label.configure(text="Month: (error)")
+
+    def _update_ue_status(self) -> None:
+        """Update Uber Eats status indicator based on prerequisites."""
+        if not self.design.ue_status:
+            return
+
+        # Check prerequisites
+        drive_connected = bool(self.design.google_drive_selected_root)
+        period_valid = bool(self.get_accounting_period())
+
+        if drive_connected and period_valid:
+            self.design.ue_status.set_ok()
+        else:
+            self.design.ue_status.set_error()
+
+    def _on_ue_step1_clicked(self) -> None:
+        """Handle Uber Eats Step 1 button click - Parse CSVs.
+
+        Description:
+            Validates prerequisites, gets CSV folder path, and runs
+            rename_uber_eats_files to standardise filenames based on
+            month code in filename.
+        """
+        from implementation.I01_project_set_file_paths import initialise_provider_paths, get_provider_paths
+
+        # 1. Check Google Drive is selected
+        drive_root = self.design.google_drive_selected_root
+        if not drive_root:
+            self._log_to_console("Uber Eats Step 1: Please select a Google Drive account first.")
+            show_warning("Please select a Google Drive account first.")
+            return
+
+        # 2. Initialize provider paths
+        initialise_provider_paths(drive_root)
+        provider_paths = get_provider_paths("uber")
+
+        if not provider_paths:
+            self._log_to_console("Uber Eats Step 1: Failed to initialise provider paths.")
+            show_warning("Failed to initialise Uber Eats paths.")
+            return
+
+        csv_folder = provider_paths.get("01_csvs_01_to_process")
+
+        if not csv_folder:
+            self._log_to_console("Uber Eats Step 1: CSV folder path not configured.")
+            show_error("Uber Eats CSV folder path not configured.\nCheck I01_project_set_file_paths.")
+            return
+
+        if not csv_folder.exists():
+            self._log_to_console(f"Uber Eats Step 1: CSV folder does not exist: {csv_folder}")
+            show_error(f"Uber Eats CSV folder does not exist:\n{csv_folder}")
+            return
+
+        # 3. Disable button and run
+        self.design.ue_step1_btn.configure(state="disabled")
+        self._log_to_console(f"Uber Eats Step 1: Renaming CSVs in {csv_folder}...")
+
+        # 4. Run in background thread
+        import threading
+        threading.Thread(
+            target=self._run_ue_step1_thread,
+            args=(csv_folder,),
+            daemon=True
+        ).start()
+
+    def _run_ue_step1_thread(self, csv_folder: Path) -> None:
+        """Background thread for Uber Eats Step 1 - Rename CSVs.
+
+        Args:
+            csv_folder: Path to Uber Eats CSV folder.
+        """
+        try:
+            renamed_count = rename_uber_eats_files(
+                csv_folder=csv_folder,
+                log_callback=self._log_to_console,
+            )
+
+            if renamed_count > 0:
+                self._log_to_console(f"✅ Uber Eats Step 1 complete: Renamed {renamed_count} file(s).")
+            else:
+                self._log_to_console("⚠️ Uber Eats Step 1: No files renamed (already in standard format or no files found).")
+
+        except Exception as e:
+            log_exception(e, context="Uber Eats Step 1")
+            self._log_to_console(f"❌ Uber Eats Step 1 error: {e}")
+
+        finally:
+            # Re-enable button
+            self.design.ue_step1_btn.configure(state="normal")
+
+    def _on_ue_step2_clicked(self) -> None:
+        """Handle Uber Eats Step 2 button click - Reconciliation."""
+        # 1. Check Google Drive is selected
+        drive_root = self.design.google_drive_selected_root
+        if not drive_root:
+            self._log_to_console("Uber Eats Step 2: Please select a Google Drive account first.")
+            return
+
+        # 2. Get accounting period
+        accounting_period = self.get_accounting_period()
+        if not accounting_period:
+            self._log_to_console("Uber Eats Step 2: Please set a valid accounting period first.")
+            return
+
+        # 3. Log action
+        self._log_to_console(f"Uber Eats Step 2: Reconciliation ({accounting_period})")
+        self._log_to_console("Uber Eats Step 2: Implementation not yet available.")
+
+        # TODO: When implementation is ready, implement similar to Braintree
 
     # ------------------------------------------------------------------------------------------------
     # DELIVEROO CONTROLLER

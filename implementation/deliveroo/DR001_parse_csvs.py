@@ -77,7 +77,11 @@ from core.C07_datetime_utils import parse_date, format_date, get_start_of_week, 
 from core.C09_io_utils import save_dataframe
 
 from implementation.I01_project_set_file_paths import get_provider_paths
-from implementation.I02_project_shared_functions import statement_overlaps_range, validate_path_exists
+from implementation.I02_project_shared_functions import (
+    statement_overlaps_range,
+    validate_path_exists,
+    rename_raw_statement_files,
+)
 from implementation.I03_project_static_lists import DR_COLUMN_RENAME_MAP, DR_COLUMN_ORDER, DR_ACCOUNTING_CATEGORY_MAP
 
 
@@ -98,8 +102,7 @@ def rename_gopuff_files(csv_folder: Path, log_callback: Callable[[str], None] | 
     """
     Description:
         Renames GoPuff-format CSV files to standard Deliveroo Statement format.
-        The GoPuff filename contains the invoice date (Monday of the following week),
-        so we subtract 7 days to get the actual statement week Monday.
+        Uses shared rename_raw_statement_files() from I02.
 
     Args:
         csv_folder (Path): Folder containing CSV files to process.
@@ -108,64 +111,19 @@ def rename_gopuff_files(csv_folder: Path, log_callback: Callable[[str], None] | 
     Returns:
         int: Number of files renamed.
 
-    Raises:
-        None (logs warnings for individual file errors).
-
     Notes:
         - Input pattern: GoPuff_YYYYMMDD_statement.csv
         - Output pattern: YY.MM.DD - Deliveroo Statement.csv
-        - Skips files that don't match the GoPuff pattern.
-        - Skips if target filename already exists.
+        - The GoPuff date is the Monday of the FOLLOWING week (-7 days offset).
     """
-    def log(msg: str) -> None:
-        logger.info(msg)
-        if log_callback:
-            log_callback(msg)
-
-    renamed_count = 0
-
-    for csv_path in csv_folder.glob("*.csv"):
-        match = GOPUFF_FILENAME_PATTERN.match(csv_path.name)
-        if not match:
-            continue
-
-        # Extract date components from filename
-        year = int(match.group(1))
-        month = int(match.group(2))
-        day = int(match.group(3))
-
-        try:
-            invoice_date = date(year, month, day)
-        except ValueError:
-            logger.warning("Invalid date in filename: %s", csv_path.name)
-            continue
-
-        # Invoice date is Monday of the FOLLOWING week, so subtract 7 days to get statement week
-        statement_week_monday = invoice_date - timedelta(days=7)
-
-        # Format new filename: YY.MM.DD - Deliveroo Statement.csv
-        new_name = format_date(statement_week_monday, "%y.%m.%d") + " - Deliveroo Statement.csv"
-        new_path = csv_folder / new_name
-
-        # Check if target already exists
-        if new_path.exists():
-            logger.warning("Target file already exists, skipping: %s", new_name)
-            continue
-
-        # Rename the file
-        try:
-            csv_path.rename(new_path)
-            log(f"Renamed: {csv_path.name} -> {new_name}")
-            renamed_count += 1
-        except OSError as e:
-            log_exception(e, context=f"Renaming {csv_path.name}")
-
-    if renamed_count > 0:
-        log(f"Renamed {renamed_count} GoPuff file(s) to Deliveroo format.")
-    else:
-        logger.debug("No GoPuff files found to rename.")
-
-    return renamed_count
+    return rename_raw_statement_files(
+        folder=csv_folder,
+        pattern=GOPUFF_FILENAME_PATTERN,
+        output_suffix="Deliveroo Statement.csv",
+        days_offset=-7,  # Following Monday → Current Monday
+        date_format="ymd",
+        log_callback=log_callback,
+    )
 
 
 # ====================================================================================================

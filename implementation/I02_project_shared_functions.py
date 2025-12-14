@@ -526,3 +526,111 @@ def delete_mfc_mapping(reference_folder: Path, deliveroo_name: str) -> bool:
         logger.warning("MFC mapping not found for deletion: %s", deliveroo_name)
 
     return save_mfc_mapping(reference_folder, mapping)
+
+
+# ====================================================================================================
+# 7. FILE RENAMING FUNCTIONS
+# ====================================================================================================
+
+def rename_raw_statement_files(
+    folder: Path,
+    pattern: re.Pattern,
+    output_suffix: str,
+    days_offset: int,
+    date_format: str = "dmy",
+    log_callback: Callable[[str], None] | None = None,
+) -> int:
+    """
+    Description:
+        Generic function to rename raw statement files to a standard format.
+        Extracts date from filename using regex, applies offset, and renames.
+
+    Args:
+        folder (Path): Folder containing files to process.
+        pattern (re.Pattern): Compiled regex with 3 capture groups for date components.
+            - For "dmy" format: groups are (day, month, year)
+            - For "ymd" format: groups are (year, month, day)
+        output_suffix (str): Suffix for output filename (e.g., "JE Statement.pdf").
+        days_offset (int): Days to add/subtract from extracted date to get target date.
+            - Use -6 for JE (Sunday → Monday)
+            - Use -7 for Deliveroo (following Monday → current Monday)
+        date_format (str): Format of date in input filename.
+            - "dmy" for DD.MM.YY (e.g., JE: 07.12.25)
+            - "ymd" for YYYYMMDD (e.g., Deliveroo GoPuff: 20251215)
+        log_callback (Callable | None): Optional callback for GUI logging.
+
+    Returns:
+        int: Number of files renamed.
+
+    Notes:
+        - Output filename format: YY.MM.DD - {output_suffix}
+        - Skips files that don't match the pattern.
+        - Skips if target filename already exists.
+        - Works with both CSV and PDF files (determined by output_suffix).
+    """
+    from core.C07_datetime_utils import format_date
+
+    def log(msg: str) -> None:
+        logger.info(msg)
+        if log_callback:
+            log_callback(msg)
+
+    renamed_count = 0
+
+    # Determine file extension from output_suffix
+    file_ext = Path(output_suffix).suffix.lower()  # e.g., ".pdf" or ".csv"
+    glob_pattern = f"*{file_ext}"
+
+    for file_path in folder.glob(glob_pattern):
+        match = pattern.match(file_path.name)
+        if not match:
+            continue
+
+        # Extract date components based on format
+        try:
+            if date_format == "dmy":
+                # DD.MM.YY format (e.g., JE PDFs)
+                day = int(match.group(1))
+                month = int(match.group(2))
+                year_raw = int(match.group(3))
+                year = year_raw + 2000 if year_raw < 100 else year_raw
+            elif date_format == "ymd":
+                # YYYYMMDD format (e.g., GoPuff CSVs)
+                year = int(match.group(1))
+                month = int(match.group(2))
+                day = int(match.group(3))
+            else:
+                logger.warning("Unknown date_format '%s' for file: %s", date_format, file_path.name)
+                continue
+
+            source_date = date(year, month, day)
+        except (ValueError, IndexError) as e:
+            logger.warning("Invalid date in filename %s: %s", file_path.name, e)
+            continue
+
+        # Apply offset to get target date
+        target_date = source_date + timedelta(days=days_offset)
+
+        # Format new filename: YY.MM.DD - {output_suffix}
+        new_name = format_date(target_date, "%y.%m.%d") + " - " + output_suffix
+        new_path = folder / new_name
+
+        # Check if target already exists
+        if new_path.exists():
+            logger.warning("Target file already exists, skipping: %s", new_name)
+            continue
+
+        # Rename the file
+        try:
+            file_path.rename(new_path)
+            log(f"Renamed: {file_path.name} -> {new_name}")
+            renamed_count += 1
+        except OSError as e:
+            log_exception(e, context=f"Renaming {file_path.name}")
+
+    if renamed_count > 0:
+        log(f"Renamed {renamed_count} file(s) to standard format.")
+    else:
+        logger.debug("No files found matching pattern to rename.")
+
+    return renamed_count
